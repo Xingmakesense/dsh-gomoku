@@ -17,6 +17,12 @@ export interface ReasoningEntry {
     durationMs?: number;
     /** How many model attempts the node half needed (1 = first try landed). */
     attempts?: number;
+    /** Provider-reported input tokens for the move. */
+    inputTokens?: number;
+    /** Provider-reported output tokens (thinking + visible) for the move. */
+    outputTokens?: number;
+    /** Provider-reported reasoning tokens, when the provider separates them. */
+    reasoningTokens?: number;
 }
 /** The playable game state (board, turn, outcome, log). */
 export interface GameState {

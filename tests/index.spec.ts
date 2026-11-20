@@ -7,13 +7,15 @@ import {
 const emptyBoard = (): number[] => new Array<number>(BOARD_SIZE * BOARD_SIZE).fill(EMPTY)
 
 describe('boardText', () => {
-  it('renders an empty board as a column header plus 15 labeled rows', () => {
+  it('renders a compact two-line column header plus 15 unlabeled-width rows', () => {
     const text = boardText(emptyBoard())
     const lines = text.split('\n')
-    expect(lines).toHaveLength(16)
-    expect(lines[0]).toBe('     0  1  2  3  4  5  6  7  8  9 10 11 12 13 14')
-    expect(lines[1]).toBe(` 0 ${'  ·'.repeat(BOARD_SIZE)}`)
-    expect(lines[15]).toBe(`14 ${'  ·'.repeat(BOARD_SIZE)}`)
+    expect(lines).toHaveLength(17)
+    // Tens and units of the column number, one character per column.
+    expect(lines[0]).toBe('  000000000011111')
+    expect(lines[1]).toBe('  012345678901234')
+    expect(lines[2]).toBe(' 0' + '·'.repeat(BOARD_SIZE))
+    expect(lines[16]).toBe('14' + '·'.repeat(BOARD_SIZE))
   })
 
   it('renders black and white stones with B and W', () => {
@@ -21,8 +23,13 @@ describe('boardText', () => {
     board[0] = BLACK
     board[1 * BOARD_SIZE + 2] = WHITE
     const lines = boardText(board).split('\n')
-    expect(lines[1]!.startsWith(' 0   B')).toBe(true)
-    expect(lines[2]!.startsWith(' 1   ·  ·  W')).toBe(true)
+    expect(lines[2]!.startsWith(' 0B')).toBe(true)
+    expect(lines[3]!.startsWith(' 1··W')).toBe(true)
+  })
+
+  it('keeps the whole grid well under the old wide layout', () => {
+    // The per-move request text is paid on every move: keep it compact.
+    expect(boardText(emptyBoard()).length).toBeLessThan(340)
   })
 })
 
@@ -170,8 +177,9 @@ describe('buildMoveUserMessage', () => {
     expect(message.role).toBe('user')
     const text = (message.content[0] as { type: 'text'; text: string }).text
     expect(text).toContain('你执黑方')
-    expect(text).toContain('     0  1  2  3  4  5  6  7  8  9 10 11 12 13 14')
-    expect(text).toContain(` 0 ${'  ·'.repeat(BOARD_SIZE)}`)
+    expect(text).toContain('  000000000011111')
+    expect(text).toContain('  012345678901234')
+    expect(text).toContain(' 0' + '·'.repeat(BOARD_SIZE))
     expect(text).toContain('轮到你（黑方）落子')
   })
 

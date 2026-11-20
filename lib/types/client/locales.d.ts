@@ -52,6 +52,7 @@ export declare const zh: {
     'reasoning.empty': string;
     'reasoning.move': string;
     'reasoning.attempts': string;
+    'reasoning.tokens': string;
     'reasoning.duration': string;
     'reasoning.expand': string;
     'reasoning.collapse': string;
@@ -125,6 +126,7 @@ export declare const en: {
     'reasoning.empty': string;
     'reasoning.move': string;
     'reasoning.attempts': string;
+    'reasoning.tokens': string;
     'reasoning.duration': string;
     'reasoning.expand': string;
     'reasoning.collapse': string;

@@ -31,6 +31,12 @@ export interface ReasoningEntry {
   durationMs?: number
   /** How many model attempts the node half needed (1 = first try landed). */
   attempts?: number
+  /** Provider-reported input tokens for the move. */
+  inputTokens?: number
+  /** Provider-reported output tokens (thinking + visible) for the move. */
+  outputTokens?: number
+  /** Provider-reported reasoning tokens, when the provider separates them. */
+  reasoningTokens?: number
 }
 
 /** The playable game state (board, turn, outcome, log). */
@@ -649,6 +655,9 @@ function applyAiReply(
           // fall back to the client measurement for older node halves.
           durationMs: reply.durationMs ?? durationMs,
           ...(reply.attempts !== undefined ? { attempts: reply.attempts } : {}),
+          ...(reply.usage?.inputTokens !== undefined ? { inputTokens: reply.usage.inputTokens } : {}),
+          ...(reply.usage?.outputTokens !== undefined ? { outputTokens: reply.usage.outputTokens } : {}),
+          ...(reply.usage?.reasoningTokens !== undefined ? { reasoningTokens: reply.usage.reasoningTokens } : {}),
         }],
       }
       commitGame(withLog)
@@ -682,6 +691,8 @@ function applyAiReply(
       n: game.moveCount + 1, side: sideOf(turn), move: null, reasoning: reply.reasoning ?? '', error,
       durationMs: reply.durationMs ?? durationMs,
       ...(reply.attempts !== undefined ? { attempts: reply.attempts } : {}),
+      ...(reply.usage?.inputTokens !== undefined ? { inputTokens: reply.usage.inputTokens } : {}),
+      ...(reply.usage?.outputTokens !== undefined ? { outputTokens: reply.usage.outputTokens } : {}),
     }],
   })
 }

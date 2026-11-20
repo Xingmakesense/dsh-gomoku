@@ -26,6 +26,11 @@ import { useColorScheme, type ColorScheme } from './theme.ts'
 /** Props of the settings page: the locale seat plus the settings shell's close. */
 export type GomokuSettingsProps = PropsLocale<'gomoku'> & { close: () => void }
 
+/** Compact token count: 940 → "940", 1234 → "1.2k". */
+function formatTokens(count: number): string {
+  return count >= 1000 ? (count / 1000).toFixed(1) + 'k' : String(count)
+}
+
 const THINKINGS: readonly { value: Thinking; key: GomokuKey }[] = [
   { value: 'off', key: 'thinking.off' },
   { value: 'high', key: 'thinking.high' },
@@ -247,6 +252,14 @@ function SideSettings({
                 )}
                 {entry.attempts !== undefined && entry.attempts > 1 && (
                   <span className={css.reasoningMeta}>{t('reasoning.attempts', { n: entry.attempts })}</span>
+                )}
+                {entry.inputTokens !== undefined && entry.outputTokens !== undefined && (
+                  <span className={css.reasoningMeta}>
+                    {t('reasoning.tokens', {
+                      i: formatTokens(entry.inputTokens),
+                      o: formatTokens(entry.outputTokens),
+                    })}
+                  </span>
                 )}
                 {entry.interrupted === true && <span className={css.errorText}>{t('status.interrupted')}</span>}
                 {entry.error !== undefined && entry.interrupted !== true && <span className={css.errorText}>{entry.error}</span>}

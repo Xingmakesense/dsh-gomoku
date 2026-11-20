@@ -25,7 +25,8 @@ And the most considerate touch: the board page opens and closes whenever you lik
 - **Themed coordinate chip**: hovering or focusing an intersection shows a compact row/column chip instead of the browser's native title tooltip; no native tooltip remains outside the board.
 - **A model picker drawn by the plugin**: the model dropdown no longer uses a native `<select>`, whose popup list is painted by the system and turned into a white sheet with pale labels in the dark appearance. Trigger and menu are drawn by the plugin from the host's `--dsw-alias-*` design tokens, so both appearances stay legible; the selected row carries a check mark and rows are grouped by provider. Keyboard: Arrow keys and Home/End move, Enter or Space chooses, Escape closes. The menu is positioned against the viewport, flips above the trigger when there is no room below, and is never clipped by a scrolling settings page. It is rendered into `document.body`: a settings shell that animates with a transform pushes ordinary fixed-position popups hundreds of pixels away from their trigger, and mounting at body level escapes that coordinate space entirely.
 - **One-column settings page**: the page uses only the single column of width the settings shell provides; cards stack vertically and no control creates a horizontal scrollbar.
-- **A diagnosable move pipeline**: every move records its end-to-end duration and attempt count, shown in the reasoning log (e.g. "Move 3 · 42.1s · attempt 2"), and the board status line counts the seconds while the AI thinks. Transient failures (rate limits, dropped streams, timeouts) back off before retrying (500 ms, capped at 8 s, ±20% jitter) instead of burning the attempt budget immediately; model capability lookups are cached per provider/model for five minutes, removing one roundtrip and one failure point per move; closing the page or starting a new game aborts the in-flight generation instead of burning tokens. A `GET /plugins/gomoku/log` route returns the last 40 moves with timing, attempts and outcome, so a "one move was especially slow" report can be answered after the fact.
+- **A diagnosable move pipeline**: every move records its end-to-end duration, attempt count and token usage, shown in the reasoning log (e.g. "Move 3 · 42.1s · 860 in → 120 out tokens"), and the board status line counts the seconds while the AI thinks. Transient failures (rate limits, dropped streams, timeouts) back off before retrying (500 ms, capped at 8 s, ±20% jitter) instead of burning the attempt budget immediately; model capability lookups are cached per provider/model for five minutes, removing one roundtrip and one failure point per move; the output budget is clamped to the model's own ceiling (it never asks for 32000 when the model allows 8192); closing the page or starting a new game aborts the in-flight generation instead of burning tokens. A `GET /plugins/gomoku/log` route returns the last 40 moves with timing, attempts, token usage and outcome, so a "one move was especially slow" report can be answered after the fact.
+- **A compact per-move context**: the board text moved from three characters per intersection to one character plus a two-line column header, dropping the same position from 783 to 305 characters, and the whole user message from about 900 to about 440 characters. The default system prompt stays at about 887 characters (~670 tokens): it is the largest fixed cost of a move, but shortening it directly costs playing strength. Measured input for one move is about 850 tokens, so input is not the latency driver next to a 32000-token output budget; what decides the wait is how many tokens the model thinks and emits, which is now reported per move.
 - **Light and dark appearance support**: the plugin publishes the host's resolved appearance (`color-scheme`) on its own page roots, so scrollbars and text carets follow the same theme, and the amber accent steps one shade darker in the light appearance so it does not wash out on white.
 - **Board threat hints**: every move request carries a server-computed threat list — opponent's immediate five, open three (which becomes an open four) and four points, plus this side's opportunities — inside the user message, telling the model what to defend first. It is advice only and never forces a move.
 - **Human-vs-AI and AI-vs-AI**: three modes — play black, play white, or AI-vs-AI — on a 15×15 board with free-style (no forbidden moves) rules (double-threes, double-fours, and overlines are all legal; five or more in a row wins). The mode switch and New Game button sit below the board.
@@ -54,7 +55,7 @@ dsh plugin --profile demo add dsh-better-sidebar
 dsh plugin --profile demo add @xingmakesense/dsh-gomoku
 ```
 
-If version 0.0.5 is not on npm yet, use the GitHub source install below: this repository commits the full source and the prebuilt artifacts, so no build runs at install time.
+If version 0.0.6 is not on npm yet, use the GitHub source install below: this repository commits the full source and the prebuilt artifacts, so no build runs at install time.
 
 
 ### Method 2: GitHub source
@@ -71,7 +72,7 @@ dsh plugin --profile demo add github:Xingmakesense/dsh-gomoku
 dsh plugin --profile demo add .
 # Install from a tarball (generated by pnpm pack; named like xingmakesense-dsh-gomoku-<version>.tgz)
 pnpm pack
-dsh plugin --profile demo add ./xingmakesense-dsh-gomoku-0.0.5.tgz
+dsh plugin --profile demo add ./xingmakesense-dsh-gomoku-0.0.6.tgz
 ```
 
 All three installs consume the committed prebuilt artifacts (`lib/`) — no build step runs at install time, so git installs need no `allowBuilds` entries in the profile's `pnpm-workspace.yaml` either. This release targets dsh **0.2.2-rc.3** (`@deepseek-ai/cordis` 4.1.0) and requires a Web profile (such as the built-in `web` profile) plus `dsh-better-sidebar` 0.32.1+. It uses `dsh.client`, Better Sidebar's tab service, and the unified `@deepseek-ai/cordis` / `@deepseek-ai/schemastery` packages. The old `0.1.x` client runtime is no longer supported. Development dependencies are pinned to the verified host version; rerun compatibility checks after upgrading dsh.
@@ -111,7 +112,7 @@ pnpm pack
 Install the resulting build into the local Web profile:
 
 ```sh
-dsh plugin --profile web add ./xingmakesense-dsh-gomoku-0.0.5.tgz
+dsh plugin --profile web add ./xingmakesense-dsh-gomoku-0.0.6.tgz
 dsh --profile web
 ```
 

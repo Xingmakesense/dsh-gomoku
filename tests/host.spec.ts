@@ -11,6 +11,10 @@ class TestAdapter extends LlmAdapter {
   calls: GenerateOptions[] = []
   /** How many times the runtime resolved a model's capabilities. */
   resolved = 0
+  /** Advertised output-token ceiling (absent = no clamp). */
+  defaultMaxTokens?: number
+  /** Provider usage chunk emitted before the terminal finish. */
+  usage?: { inputTokens: number; outputTokens: number; reasoningTokens?: number }
   replies = ['{"move":[7,7]}']
 
   async listModels(provider: string) {
@@ -22,6 +26,7 @@ class TestAdapter extends LlmAdapter {
     this.resolved += 1
     return {
       provider, id, name: 'Test model',
+      ...(this.defaultMaxTokens !== undefined ? { defaultMaxTokens: this.defaultMaxTokens } : {}),
       reasoning: {
         efforts: [{ id: ReasoningEffortId('high'), name: 'High' }],
         defaultEffort: ReasoningEffortId('high'),
@@ -38,6 +43,7 @@ class TestAdapter extends LlmAdapter {
     yield { type: 'block-start', index: 1, blockType: 'text' }
     yield { type: 'text-delta', index: 1, text }
     yield { type: 'block-end', index: 1, block: { type: 'text', text } }
+    if (this.usage !== undefined) yield { type: 'usage', usage: this.usage }
     yield { type: 'finish', reason: { kind: 'stop' } }
   }
 }
@@ -129,6 +135,24 @@ describe('DSH host integration', () => {
     expect(body.entries).toHaveLength(2)
     expect(body.entries[0]).toMatchObject({ side: 'black', attempts: 1, outcome: 'move 7,7' })
     expect(body.entries[0]!.durationMs).toBeGreaterThanOrEqual(0)
+  })
+
+  it('clamps the output budget to the model default and reports token usage', async () => {
+    adapter.defaultMaxTokens = 4096
+    adapter.usage = { inputTokens: 900, outputTokens: 40, reasoningTokens: 12 }
+    const response = await post(base, request({ thinking: 'off', maxMoveOutputTokens: 32000 }))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      move: { row: 7, col: 7 },
+      maxTokens: 4096,
+      usage: { inputTokens: 900, outputTokens: 40, reasoningTokens: 12 },
+    })
+    expect(adapter.calls.at(-1)?.maxTokens).toBe(4096)
+
+    const log = await (await fetch(`${base}/log`)).json() as {
+      entries: { maxTokens?: number; usage?: { inputTokens: number } }[]
+    }
+    expect(log.entries.at(-1)).toMatchObject({ maxTokens: 4096, usage: { inputTokens: 900 } })
   })
 
   it('backs off before retrying a rejected move instead of hammering the provider', async () => {

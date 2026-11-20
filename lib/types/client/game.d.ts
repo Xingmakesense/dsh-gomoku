@@ -67,6 +67,15 @@ export interface MoveResponse {
     durationMs?: number;
     /** How many model attempts the node half needed (1 = first try landed). */
     attempts?: number;
+    /** Provider-reported token accounting, when the provider sends it. */
+    usage?: {
+        inputTokens?: number;
+        outputTokens?: number;
+        reasoningTokens?: number;
+        cacheReadTokens?: number;
+    };
+    /** The output-token budget the node half actually requested. */
+    maxTokens?: number;
 }
 /**
  * Whether an intersection is inside the board and currently empty.

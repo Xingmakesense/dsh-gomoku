@@ -33,7 +33,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { BlockAssembler, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
-  ContentBlock, FinishReason, GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, RequestUserInput,
+  ContentBlock, FinishReason, GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, RequestUserInput, TokenUsage,
 } from '@deepseek-ai/dsh-llm'
 // Type-only: the ctx.webServer merge (the webserver host plugin).
 import type {} from '@deepseek-ai/dsh-host-webserver'
@@ -198,15 +198,18 @@ export function isLegalMove(board: readonly number[], row: number, col: number):
  * @returns the labeled board text.
  */
 export function boardText(board: readonly number[]): string {
-  const lines: string[] = []
-  // Three-character columns: header digits right-aligned (so two-digit
-  // numbers keep their place), cells rendered as two spaces plus the stone.
-  lines.push(`   ${Array.from({ length: BOARD_SIZE }, (_, col) => String(col).padStart(3)).join('')}`)
+  // Compact framed board: one character per intersection, row labels on the
+  // left and a two-digit column header (tens over units). The previous
+  // three-characters-per-cell grid said the same thing in ~2.5x the text; the
+  // model pays for every character on every move.
+  const tens = Array.from({ length: BOARD_SIZE }, (_, col) => String(Math.floor(col / 10))).join('')
+  const units = Array.from({ length: BOARD_SIZE }, (_, col) => String(col % 10)).join('')
+  const lines: string[] = [`  ${tens}`, `  ${units}`]
   for (let row = 0; row < BOARD_SIZE; row += 1) {
-    let line = `${String(row).padStart(2)} `
+    let line = String(row).padStart(2)
     for (let col = 0; col < BOARD_SIZE; col += 1) {
       const cell = board[row * BOARD_SIZE + col]
-      line += `  ${cell === BLACK ? 'B' : cell === WHITE ? 'W' : '·'}`
+      line += cell === BLACK ? 'B' : cell === WHITE ? 'W' : '·'
     }
     lines.push(line)
   }
@@ -288,6 +291,10 @@ interface MoveAttemptText {
   reasoning: string
   /** True when the stream hit maxMoveOutputTokens (the JSON may still be complete). */
   truncated: boolean
+  /** Provider-reported token accounting for this attempt, when the stream carried it. */
+  usage?: TokenUsage
+  /** The output-token budget this attempt actually used (after model clamping). */
+  maxTokens?: number
 }
 
 /**
@@ -408,19 +415,23 @@ async function streamMoveText(
   if (request.provider === JEV_PROVIDER) {
     return requestJevMove(request.board, request.side, system, request.jevApiKey!, signal)
   }
+  const info = await cachedModelInfo(ctx, request.provider, request.model, signal)
   let reasoningEffort: ReasoningEffortId | undefined
-  if (request.thinking !== undefined) {
-    const info = await cachedModelInfo(ctx, request.provider, request.model, signal)
-    if (info.reasoning?.efforts.some(effort => effort.id === request.thinking)) {
-      reasoningEffort = ReasoningEffortId(request.thinking)
-    }
+  if (request.thinking !== undefined
+    && info.reasoning?.efforts.some(effort => effort.id === request.thinking)) {
+    reasoningEffort = ReasoningEffortId(request.thinking)
   }
+  // Never ask for more output than the model advertises: an oversized budget
+  // is rejected by some providers and otherwise just invites runaway thinking.
+  const budget = info.defaultMaxTokens !== undefined
+    ? Math.min(maxTokens, info.defaultMaxTokens)
+    : maxTokens
   const options: GenerateOptions = {
     provider: request.provider,
     model: request.model,
     messages: [user],
     system,
-    maxTokens,
+    maxTokens: budget,
     signal,
     ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
   }
@@ -448,7 +459,7 @@ async function streamMoveText(
     .map(block => block.text)
     .join(' ')
     .trim()
-  return { text, reasoning, truncated }
+  return { text, reasoning, truncated, maxTokens: budget, ...(assembler.usage !== undefined ? { usage: assembler.usage } : {}) }
 }
 
 /**
@@ -516,7 +527,11 @@ export function validateMoveRequest(value: unknown): MoveRequestBody {
 /** Frame the user message for one move attempt (board + side + optional corrective feedback). */
 export function buildMoveUserMessage(request: MoveRequestBody, previous: string | undefined, reason: string | undefined): RequestUserInput {
   const sideLabel = request.side === 'black' ? '黑方' : '白方'
-  const lines = [`你执${sideLabel}。当前棋盘（黑=B，白=W，空=·）：`, boardText(request.board), `轮到你（${sideLabel}）落子。请只返回合法的 JSON 落子。`]
+  const lines = [
+    `你执${sideLabel}。当前棋盘（黑=B，白=W，空=·；上方两行是列号的十位与个位，左侧是行号）：`,
+    boardText(request.board),
+    `轮到你（${sideLabel}）落子。请只返回合法的 JSON 落子。`,
+  ]
   // Tell the model what the position actually contains; the hint is advice,
   // never a forced move.
   lines.push('', '# 威胁提示（程序判定，仅作参考，不强制落子）', threatHintText(analyzeThreats(request.board, request.side), request.side))
@@ -558,6 +573,10 @@ export function apply(ctx: Context, config: Config): void {
     outcome: string
     /** The failure detail, when the move failed. */
     detail?: string
+    /** Provider-reported token accounting of the last attempt. */
+    usage?: TokenUsage
+    /** The output-token budget the move actually requested. */
+    maxTokens?: number
   }
 
   /** How many finished moves the diagnostics ring keeps. */
@@ -641,18 +660,32 @@ export function apply(ctx: Context, config: Config): void {
             }
             res.on('close', onResponseClose)
             /** Record one settled move in the diagnostics ring and the logger. */
-            const settle = (outcome: string, attempts: number, detail?: string): void => {
+            const settle = (
+              outcome: string, attempts: number, detail?: string, attemptText?: MoveAttemptText,
+            ): void => {
+              const usage = attemptText?.usage
               moveLog.push({
                 time: new Date().toISOString(), side: request.side, provider: request.provider,
                 model: request.model, attempts, durationMs: elapsed(), outcome,
                 ...(detail !== undefined ? { detail } : {}),
+                ...(usage !== undefined ? { usage } : {}),
+                ...(attemptText?.maxTokens !== undefined ? { maxTokens: attemptText.maxTokens } : {}),
               })
               if (moveLog.length > MOVE_LOG_LIMIT) moveLog.splice(0, moveLog.length - MOVE_LOG_LIMIT)
               ctx.logger.info(
-                'gomoku: %s move via %s/%s took %dms over %d attempt(s): %s',
-                request.side, request.provider, request.model, elapsed(), attempts, outcome,
+                'gomoku: %s move via %s/%s took %dms over %d attempt(s)%s: %s',
+                request.side, request.provider, request.model, elapsed(), attempts,
+                usage !== undefined
+                  ? `, tokens in/out ${usage.inputTokens}/${usage.outputTokens}${usage.reasoningTokens !== undefined ? ' (reasoning ' + usage.reasoningTokens + ')' : ''}`
+                  : '',
+                outcome,
               )
             }
+            /** Token fields every response carries when the provider reported them. */
+            const telemetry = (attemptText: MoveAttemptText | undefined): Record<string, unknown> => ({
+              ...(attemptText?.usage !== undefined ? { usage: attemptText.usage } : {}),
+              ...(attemptText?.maxTokens !== undefined ? { maxTokens: attemptText.maxTokens } : {}),
+            })
             try {
               const system = request.system !== undefined && request.system.trim().length > 0
                 ? request.system
@@ -661,6 +694,7 @@ export function apply(ctx: Context, config: Config): void {
               let lastReason: string | undefined
               let lastReasoning = ''
               let attemptsUsed = 0
+              let lastAttempt: MoveAttemptText | undefined
               for (let attempt = 1; attempt <= resolved.maxMoveAttempts; attempt += 1) {
                 attemptsUsed = attempt
                 const user = buildMoveUserMessage(request, lastText, lastReason)
@@ -692,6 +726,7 @@ export function apply(ctx: Context, config: Config): void {
                   break
                 }
                 const text = attemptText.text
+                lastAttempt = attemptText
                 lastReasoning = attemptText.reasoning
                 const reply = parseMoveReply(text)
                 if (reply.kind === 'move') {
@@ -703,29 +738,32 @@ export function apply(ctx: Context, config: Config): void {
                     }
                     continue
                   }
-                  settle('move ' + reply.row + ',' + reply.col, attempt)
+                  settle('move ' + reply.row + ',' + reply.col, attempt, undefined, attemptText)
                   writeJson(200, {
                     move: { row: reply.row, col: reply.col },
                     reasoning: lastReasoning,
                     durationMs: elapsed(),
                     attempts: attempt,
+                    ...telemetry(attemptText),
                   })
                   return
                 }
                 if (reply.kind === 'draw') {
-                  settle('draw', attempt)
+                  settle('draw', attempt, undefined, attemptText)
                   writeJson(200, {
                     draw: true, reasoning: lastReasoning, durationMs: elapsed(), attempts: attempt,
+                    ...telemetry(attemptText),
                   })
                   return
                 }
                 if (reply.kind === 'error') {
-                  settle('ai-error: ' + reply.message, attempt, reply.message)
+                  settle('ai-error: ' + reply.message, attempt, reply.message, attemptText)
                   writeJson(200, {
                     error: `AI 报告：${reply.message}`,
                     reasoning: lastReasoning,
                     durationMs: elapsed(),
                     attempts: attempt,
+                    ...telemetry(attemptText),
                   })
                   return
                 }
@@ -737,12 +775,13 @@ export function apply(ctx: Context, config: Config): void {
                   await sleep(jitteredDelayMs(attempt), controller.signal)
                 }
               }
-              settle('failed: ' + (lastReason ?? 'unknown'), attemptsUsed, lastReason)
+              settle('failed: ' + (lastReason ?? 'unknown'), attemptsUsed, lastReason, lastAttempt)
               writeJson(200, {
                 error: `AI 连续 ${resolved.maxMoveAttempts} 次未能完成落子（最后原因：${lastReason ?? '未知'}）`,
                 reasoning: lastReasoning,
                 durationMs: elapsed(),
                 attempts: attemptsUsed,
+                ...telemetry(lastAttempt),
               })
             } catch (error) {
               const message = error instanceof Error ? error.message : String(error)
