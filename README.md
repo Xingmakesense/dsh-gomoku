@@ -7,7 +7,7 @@
   <img src="assets/settings.png" width="880" alt="设置页" />
 </p>
 
-总是让 AI 帮你写代码、做表格？这次换它陪你下棋。`@yejiming/dsh-gomoku` 是 DeepSeek Harness 的五子棋插件：通过 Better Sidebar（`dsh-better-sidebar`）的标签注册服务，把「五子棋」作为一个独立页面放进右侧边栏，摆上一盘 15×15 的棋盘，让 DeepSeek 或任何你配置好的模型执子对弈。
+总是让 AI 帮你写代码、做表格？这次换它陪你下棋。`@xingmakesense/dsh-gomoku` 是 DeepSeek Harness 的五子棋插件：通过 Better Sidebar（`dsh-better-sidebar`）的标签注册服务，把「五子棋」作为一个独立页面放进右侧边栏，摆上一盘 15×15 的棋盘，让 DeepSeek 或任何你配置好的模型执子对弈。
 
 这里没有搜索算法，也没有启发式剪枝——每一步落子都来自 LLM 纯粹的推理与判断，堪称对模型「思考能力」最直观的考验。最过瘾的当属双 AI 对战：让两个模型同台厮杀，谁的推理更缜密、更懂审时度势，一局见分晓。
 
@@ -43,10 +43,10 @@ dsh plugin --profile demo add dsh-better-sidebar
 
 ```sh
 # 从 npm 安装（首次使用会初始化该 profile）
-dsh plugin --profile demo add @yejiming/dsh-gomoku
+dsh plugin --profile demo add @xingmakesense/dsh-gomoku
 ```
 
-若 npm 上尚未发布 0.0.1 版本，请改用下面的 GitHub 源码安装：本仓库已提交完整源码与构建产物，安装时无需构建。
+若 npm 上尚未发布 0.0.2 版本，请改用下面的 GitHub 源码安装：本仓库已提交完整源码与构建产物，安装时无需构建。
 
 
 ### 方式二：GitHub 源码安装
@@ -61,9 +61,9 @@ dsh plugin --profile demo add github:Xingmakesense/dsh-gomoku
 ```sh
 # 从本地 checkout 安装（在插件目录内执行）
 dsh plugin --profile demo add .
-# 从 tarball 安装（tarball 由 pnpm pack 生成，文件名形如 yejiming-dsh-gomoku-<版本>.tgz）
+# 从 tarball 安装（tarball 由 pnpm pack 生成，文件名形如 xingmakesense-dsh-gomoku-<版本>.tgz）
 pnpm pack
-dsh plugin --profile demo add ./yejiming-dsh-gomoku-0.0.1.tgz
+dsh plugin --profile demo add ./xingmakesense-dsh-gomoku-0.0.2.tgz
 ```
 
 以上方式都直接使用仓库内提交的预构建产物（`lib/`），安装时不需要执行构建脚本——从 git 安装也无需在 profile 的 `pnpm-workspace.yaml` 里配置 `allowBuilds`。当前版本适配 dsh **0.2.2-rc.3**（`@deepseek-ai/cordis` 4.1.0），需要 Web profile（如内置的 `web` profile）与 `dsh-better-sidebar` 0.32.1+。插件使用新版 `dsh.client` 声明、Better Sidebar 的标签服务，以及统一的 `@deepseek-ai/cordis` / `@deepseek-ai/schemastery` 接口；不再兼容旧的 `0.1.x` 客户端运行时。开发依赖固定为本次验证的宿主版本，升级 dsh 后应重新执行兼容性检查。
@@ -75,7 +75,7 @@ dsh --profile demo --dump-config   # 输出中应出现 gomoku 层
 dsh --profile demo
 ```
 
-移除：`dsh plugin --profile demo remove @yejiming/dsh-gomoku` 会同时移除依赖与对应层。
+移除：`dsh plugin --profile demo remove @xingmakesense/dsh-gomoku` 会同时移除依赖与对应层。
 
 ## Jev 模型
 
@@ -103,7 +103,7 @@ pnpm pack
 将本次构建安装到本机 Web profile：
 
 ```sh
-dsh plugin --profile web add ./yejiming-dsh-gomoku-0.0.1.tgz
+dsh plugin --profile web add ./xingmakesense-dsh-gomoku-0.0.2.tgz
 dsh --profile web
 ```
 

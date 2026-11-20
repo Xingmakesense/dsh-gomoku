@@ -6,4 +6,4 @@
 # belongs here (duplicate ids fail the load).
 - insert:
     - id: gomoku
-      name: '@yejiming/dsh-gomoku'
+      name: '@xingmakesense/dsh-gomoku'

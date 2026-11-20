@@ -11,7 +11,7 @@
  * reset the game. Better Sidebar is a hard client requirement: the board
  * page exists only inside its registry, so the plugin waits for
  * `ctx.betterSidebar` before applying.
- * @module @yejiming/dsh-gomoku/client
+ * @module @xingmakesense/dsh-gomoku/client
  */
 import { createElement } from 'react'
 import type { Context } from '@deepseek-ai/cordis'

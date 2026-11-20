@@ -25,7 +25,7 @@
  * correct examples are all spelled out in {@link DEFAULT_SYSTEM_PROMPT};
  * users may hand-edit the prompt in the UI, in which case the edited text is
  * sent verbatim as the system prompt.
- * @module @yejiming/dsh-gomoku
+ * @module @xingmakesense/dsh-gomoku
  */
 import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
