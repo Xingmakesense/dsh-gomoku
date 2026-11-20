@@ -1,12 +1,6 @@
 /** `gomoku` namespace dictionaries for the board page. */
 /** Dictionary namespace owned by this plugin. */
 export declare const NS = "gomoku";
-/** Module augmentation: this plugin owns the `gomoku` locale namespace. */
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-    interface LocaleNamespaceMap {
-        gomoku: GomokuKey;
-    }
-}
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export declare const zh: {
     'tab.label': string;

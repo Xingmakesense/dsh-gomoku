@@ -15,7 +15,14 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the ctx.betterSidebar service merge and TabDescriptor.
 import type {} from 'dsh-better-sidebar'
 import { GomokuIcon, GomokuView } from './GomokuView.tsx'
-import { NS, en, zh } from './locales.ts'
+import { NS, en, zh, type GomokuKey } from './locales.ts'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    /** The gomoku page copy. */
+    gomoku: GomokuKey
+  }
+}
 
 /** Required services: the locale registry and the better-sidebar tab registry. */
 export const inject = ['locale', 'betterSidebar']

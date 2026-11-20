@@ -1,4 +1,11 @@
 import type { Context } from '@deepseek-ai/cordis';
+import { type GomokuKey } from './locales.ts';
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+    interface LocaleNamespaceMap {
+        /** The gomoku page copy. */
+        gomoku: GomokuKey;
+    }
+}
 /** Required services: the locale registry and the better-sidebar tab registry. */
 export declare const inject: string[];
 /**
