@@ -193,6 +193,7 @@ describe('default system prompt', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain('双活三')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('四三')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('双防')
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('威胁提示')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('天元')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('{"move": [row, col]}')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('{"draw": true}')

@@ -38,6 +38,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-llm'
 import { JEV_MODEL, JEV_PROVIDER, isValidJevApiKey } from './jev-shared.ts'
 import { requestJevMove } from './jev.ts'
+import { analyzeThreats, threatHintText } from './threats.ts'
 
 /** Cordis plugin name (diagnostics only). */
 export const name = 'gomoku'
@@ -101,14 +102,17 @@ export const DEFAULT_SYSTEM_PROMPT = [
   '',
   '# 快速判断（按优先级，命中即停）',
   '1. 己方成五：任一方向己方已有连续 4 子（含跳四）且空端可成五 → 立即落子取胜。',
-  '2. 对手成五：对手 4 子的成五点 → 必须封堵；若对手活四无法单点封堵，则改走己方最快取胜点。',
+  '2. 对手成五：对手 4 子的成五点 → 必须封堵；若对手活四无法单点封堵，则改走己方最快取胜点。消息中的威胁提示会列出这些点。',
   '3. 己方强攻：能形成活四、冲四或「四三」的点优先；冲四可迫使对手应手，为下一手争取先手。',
-  '4. 对手活三：立即封堵其一端；若一子能同时封堵两个威胁（双防点），优先选双防点。',
+  '4. 对手活三：立即封堵其一端；若一子能同时封堵两个威胁（双防点），优先选双防点。威胁提示会列出对方可形成活四的点。',
   '5. 己方活三/双活三：无紧急威胁时，选择能形成活三、双活三或多方向连线的点。',
   '6. 布局：靠近天元与双方已有棋群，保持连线；避免边角、孤立与没有后续的落点。',
   '',
   '# 术语',
   '活三＝3 连且两端可延伸（下一步可成活四）；冲四＝4 连且仅一端可成五；活四＝两端均可成五、无法单点封堵；双活三/四三＝一子同时形成两个活三 / 冲四加活三，均为强杀。',
+  '',
+  '# 威胁提示',
+  '每次请求附带程序计算的威胁清单：对方可直接成五 / 活三（落子即形成活四）与冲四的点，以及己方机会。它只作参考，不强制落子；出现对方成五点或活三时必须优先处理，再考虑进攻。',
   '',
   '# 候选比较（最多评估 6 个点）',
   '- 只考虑现有棋子 2 格以内的空点；黑方首手固定天元 (7,7)。',
@@ -440,6 +444,9 @@ export function validateMoveRequest(value: unknown): MoveRequestBody {
 export function buildMoveUserMessage(request: MoveRequestBody, previous: string | undefined, reason: string | undefined): RequestUserInput {
   const sideLabel = request.side === 'black' ? '黑方' : '白方'
   const lines = [`你执${sideLabel}。当前棋盘（黑=B，白=W，空=·）：`, boardText(request.board), `轮到你（${sideLabel}）落子。请只返回合法的 JSON 落子。`]
+  // Tell the model what the position actually contains; the hint is advice,
+  // never a forced move.
+  lines.push('', '# 威胁提示（程序判定，仅作参考，不强制落子）', threatHintText(analyzeThreats(request.board, request.side), request.side))
   if (previous !== undefined && reason !== undefined) {
     lines.push('', `警告：你上一次的返回不合法（${reason}），完整输出如下：`, previous)
     lines.push('你的上一次落子已被拒绝。请重新观察棋盘，选择另一个未被占用的空交叉点，不要输出任何思考过程或解释，只返回一个合法的 JSON 对象。')
