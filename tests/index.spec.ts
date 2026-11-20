@@ -207,6 +207,8 @@ describe('default system prompt', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain('{"draw": true}')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('{"error"')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('只输出一行 JSON')
+    // The hard per-move budget is part of the contract the model is told about.
+    expect(DEFAULT_SYSTEM_PROMPT).toContain('20 秒')
     // Compactness is a feature: the board text and the model's own thinking
     // dominate a move request, so the prompt must stay well under the old
     // example-laden text (~5300 chars).

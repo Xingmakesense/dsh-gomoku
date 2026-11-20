@@ -95,7 +95,7 @@ describe('DSH host integration', () => {
     })
     expect(adapter.calls).toHaveLength(1)
     expect(adapter.calls[0]).toMatchObject({
-      maxTokens: 32000, reasoningEffort: 'high', system: gomoku.DEFAULT_SYSTEM_PROMPT,
+      maxTokens: 2048, reasoningEffort: 'high', system: gomoku.DEFAULT_SYSTEM_PROMPT,
     })
     expect(adapter.calls[0].messages[0]).not.toHaveProperty('source')
     expect(adapter.calls[0].messages[0]).not.toHaveProperty('id')
@@ -138,21 +138,21 @@ describe('DSH host integration', () => {
   })
 
   it('clamps the output budget to the model default and reports token usage', async () => {
-    adapter.defaultMaxTokens = 4096
+    adapter.defaultMaxTokens = 1024
     adapter.usage = { inputTokens: 900, outputTokens: 40, reasoningTokens: 12 }
     const response = await post(base, request({ thinking: 'off', maxMoveOutputTokens: 32000 }))
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({
       move: { row: 7, col: 7 },
-      maxTokens: 4096,
+      maxTokens: 1024,
       usage: { inputTokens: 900, outputTokens: 40, reasoningTokens: 12 },
     })
-    expect(adapter.calls.at(-1)?.maxTokens).toBe(4096)
+    expect(adapter.calls.at(-1)?.maxTokens).toBe(1024)
 
     const log = await (await fetch(`${base}/log`)).json() as {
       entries: { maxTokens?: number; usage?: { inputTokens: number } }[]
     }
-    expect(log.entries.at(-1)).toMatchObject({ maxTokens: 4096, usage: { inputTokens: 900 } })
+    expect(log.entries.at(-1)).toMatchObject({ maxTokens: 1024, usage: { inputTokens: 900 } })
   })
 
   it('backs off before retrying a rejected move instead of hammering the provider', async () => {

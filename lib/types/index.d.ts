@@ -48,7 +48,7 @@ export type GomokuSide = 'black' | 'white';
 export type GomokuThinking = 'off' | 'high' | 'max';
 /** Required plugin configuration. */
 export interface Config {
-    /** End-to-end deadline for one AI move attempt, in milliseconds. */
+    /** End-to-end deadline for one AI move request (all attempts), in milliseconds. */
     moveTimeoutMs: number;
     /** Output-token cap for one AI move reply. */
     maxMoveOutputTokens: number;

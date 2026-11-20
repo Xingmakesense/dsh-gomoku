@@ -101,10 +101,10 @@ export interface SettingsState {
   modelsError: string | undefined
 }
 
-/** The fixed per-move deadline in milliseconds (3000 seconds; not user-adjustable). */
-export const DEFAULT_MOVE_TIMEOUT_MS = 3_000_000
+/** The fixed per-move deadline in milliseconds (20 seconds; not user-adjustable). */
+export const DEFAULT_MOVE_TIMEOUT_MS = 20_000
 /** The fixed per-move output-token cap (not user-adjustable). */
-export const DEFAULT_MAX_MOVE_OUTPUT_TOKENS = 32_000
+export const DEFAULT_MAX_MOVE_OUTPUT_TOKENS = 2_048
 
 /** localStorage key of the persisted user settings (never the Jev key). */
 export const SETTINGS_STORAGE_KEY = 'dsh-gomoku:settings:v1'

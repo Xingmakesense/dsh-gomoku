@@ -66,7 +66,7 @@ export type GomokuThinking = 'off' | 'high' | 'max'
 
 /** Required plugin configuration. */
 export interface Config {
-  /** End-to-end deadline for one AI move attempt, in milliseconds. */
+  /** End-to-end deadline for one AI move request (all attempts), in milliseconds. */
   moveTimeoutMs: number
   /** Output-token cap for one AI move reply. */
   maxMoveOutputTokens: number
@@ -77,12 +77,13 @@ export interface Config {
 /** Loader schema with deployment defaults (no library defaults). */
 export const Config: z<Config> = z.object({
   // Fixed at the product level: the browser half always sends these values
-  // per request, so the UI no longer exposes them.
-  moveTimeoutMs: z.number().step(1).min(1000).default(3_000_000),
-  // Generous by default: reasoning models count their thinking toward the
-  // output budget, and a truncated reply is only salvageable when the JSON
-  // itself survives the cut.
-  maxMoveOutputTokens: z.number().step(1).min(8).default(32_000),
+  // per request, and the node half clamps requests to this policy, so a caller
+  // can only tighten the deadline, never widen it.
+  moveTimeoutMs: z.number().step(1).min(1000).default(20_000),
+  // Small by default: the model has twenty seconds per move, and the output
+  // budget is exactly what it spends thinking. A reply cut short is still
+  // parsed when the JSON itself survives the cut.
+  maxMoveOutputTokens: z.number().step(1).min(8).default(2_048),
   maxMoveAttempts: z.number().step(1).min(1).max(3).default(3),
 })
 
@@ -110,13 +111,16 @@ export const DEFAULT_SYSTEM_PROMPT = [
   '5. 己方活三/双活三：无紧急威胁时，选择能形成活三、双活三或多方向连线的点。',
   '6. 布局：靠近天元与双方已有棋群，保持连线；避免边角、孤立与没有后续的落点。',
   '',
+  '# 时间预算（硬性）',
+  '每一步只有 20 秒，思考与输出都算在内，超时这一手立即作废。不要展开长链推演：按上面的优先级自上而下扫描，命中第一条能执行的规则就落子；候选点最多比较 3 个，拿不准就选最靠近现有棋群、最能延续连线的点。',
+  '',
   '# 术语',
   '活三＝3 连且两端可延伸（下一步可成活四）；冲四＝4 连且仅一端可成五；活四＝两端均可成五、无法单点封堵；双活三/四三＝一子同时形成两个活三 / 冲四加活三，均为强杀。',
   '',
   '# 威胁提示',
   '每次请求附带程序计算的威胁清单：对方可直接成五 / 活三（落子即形成活四）与冲四的点，以及己方机会。它只作参考，不强制落子；出现对方成五点或活三时必须优先处理，再考虑进攻。',
   '',
-  '# 候选比较（最多评估 6 个点）',
+  '# 候选比较（最多评估 3 个点）',
   '- 只考虑现有棋子 2 格以内的空点；黑方首手固定天元 (7,7)。',
   '- 评分＝进攻价值（成 5 > 活四 > 冲四 > 活三 > 双三/四三 > 活二）＋防守价值（封成 5 > 封冲四 > 封活三/双防）。',
   '- 同分依次比较：能否强制对手应手 → 是否连接更多棋子 → 是否更靠近中心。',
@@ -641,10 +645,17 @@ export function apply(ctx: Context, config: Config): void {
           }
           if (req.method === 'POST' && segments.length === 1 && segments[0] === 'move') {
             const request = validateMoveRequest(await readJson(req))
-            // Per-request overrides stand; absent values fall back to the
-            // deployment policy from the loader config.
-            const effectiveTimeoutMs = request.moveTimeoutMs ?? resolved.moveTimeoutMs
-            const effectiveMaxTokens = request.maxMoveOutputTokens ?? resolved.maxMoveOutputTokens
+            // The loader config is the policy: a request may only tighten the
+            // deadline or shrink the output budget, never widen either. That
+            // is what keeps the per-move cap hard for every caller.
+            const effectiveTimeoutMs = Math.min(
+              request.moveTimeoutMs ?? resolved.moveTimeoutMs,
+              resolved.moveTimeoutMs,
+            )
+            const effectiveMaxTokens = Math.min(
+              request.maxMoveOutputTokens ?? resolved.maxMoveOutputTokens,
+              resolved.maxMoveOutputTokens,
+            )
             const startedAt = Date.now()
             const elapsed = (): number => Date.now() - startedAt
             const controller = new AbortController()

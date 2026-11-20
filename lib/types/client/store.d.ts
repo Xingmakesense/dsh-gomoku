@@ -88,10 +88,10 @@ export interface SettingsState {
     groups: ModelGroup[];
     modelsError: string | undefined;
 }
-/** The fixed per-move deadline in milliseconds (3000 seconds; not user-adjustable). */
-export declare const DEFAULT_MOVE_TIMEOUT_MS = 3000000;
+/** The fixed per-move deadline in milliseconds (20 seconds; not user-adjustable). */
+export declare const DEFAULT_MOVE_TIMEOUT_MS = 20000;
 /** The fixed per-move output-token cap (not user-adjustable). */
-export declare const DEFAULT_MAX_MOVE_OUTPUT_TOKENS = 32000;
+export declare const DEFAULT_MAX_MOVE_OUTPUT_TOKENS = 2048;
 /** localStorage key of the persisted user settings (never the Jev key). */
 export declare const SETTINGS_STORAGE_KEY = "dsh-gomoku:settings:v1";
 /** The whole store snapshot the view subscribes to. */
