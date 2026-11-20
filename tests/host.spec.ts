@@ -28,7 +28,10 @@ class TestAdapter extends LlmAdapter {
       provider, id, name: 'Test model',
       ...(this.defaultMaxTokens !== undefined ? { defaultMaxTokens: this.defaultMaxTokens } : {}),
       reasoning: {
-        efforts: [{ id: ReasoningEffortId('high'), name: 'High' }],
+        efforts: [
+          { id: ReasoningEffortId('off'), name: 'Off' },
+          { id: ReasoningEffortId('high'), name: 'High' },
+        ],
         defaultEffort: ReasoningEffortId('high'),
       },
     }
@@ -89,7 +92,9 @@ describe('DSH host integration', () => {
 
   it('serves the model native reasoning efforts instead of a fixed vocabulary', async () => {
     const body = await (await fetch(`${base}/efforts?provider=test&model=test-model`)).json()
-    expect(body).toEqual({ efforts: [{ id: 'high', name: 'High' }], default: 'high' })
+    expect(body).toEqual({
+      efforts: [{ id: 'off', name: 'Off' }, { id: 'high', name: 'High' }], default: 'high',
+    })
     // Jev chooses from candidates and has no thinking levels at all.
     expect(await (await fetch(`${base}/efforts?provider=gomoku-jev&model=jev-latest`)).json())
       .toEqual({ efforts: [] })
@@ -116,14 +121,25 @@ describe('DSH host integration', () => {
     expect(adapter.calls[0]).toMatchObject({ reasoningEffort: 'high', system: 'Custom rules', maxTokens: 512 })
   })
 
-  it('retries an occupied move with corrective feedback', async () => {
+  it('retries an occupied move with corrective feedback at the fastest effort', async () => {
     adapter.replies = ['{"move":[7,7]}', '{"move":[7,8]}']
     const board = Array(225).fill(0)
     board[7 * 15 + 7] = 1
-    const response = await post(base, request({ side: 'white', board }))
-    expect(await response.json()).toMatchObject({ move: { row: 7, col: 8 } })
+    const response = await post(base, request({ side: 'white', board, thinking: 'high' }))
+    expect(await response.json()).toMatchObject({ move: { row: 7, col: 8 }, attempts: 2 })
     expect(adapter.calls).toHaveLength(2)
     expect(JSON.stringify(adapter.calls[1].messages)).toContain('已被占用')
+    // First attempt honours the user's effort, the retry hands over to the
+    // model's cheapest effort so it still fits inside the deadline.
+    expect(adapter.calls[0]).toMatchObject({ reasoningEffort: 'high' })
+    expect(adapter.calls[1]).toMatchObject({ reasoningEffort: 'off' })
+  })
+
+  it('clears the diagnostics ring on request', async () => {
+    await post(base, request({ thinking: 'off' }))
+    expect(((await (await fetch(`${base}/log`)).json()) as { entries: unknown[] }).entries.length).toBeGreaterThan(0)
+    expect((await fetch(`${base}/log`, { method: 'DELETE' })).status).toBe(200)
+    expect(await (await fetch(`${base}/log`)).json()).toEqual({ entries: [] })
   })
 
   it('resolves model capabilities once and records per-move diagnostics', async () => {

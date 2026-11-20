@@ -23,3 +23,6 @@ export const MAX_MOVE_ATTEMPTS = 3
 
 /** Candidate intersections the default prompt lets the model compare before committing. */
 export const MAX_CANDIDATES = 3
+
+/** Milliseconds reserved at the tail of the deadline for the fast retry. */
+export const FAST_RETRY_RESERVE_MS = 6_000

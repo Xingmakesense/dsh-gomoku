@@ -138,3 +138,17 @@ export declare function resetSettings(): void;
  * click the board).
  */
 export declare function retryMove(): void;
+/** Drop the current game's reasoning log (the board, settings and turn stay). */
+export declare function clearLog(): void;
+/** Hard cap on the in-page reasoning log: how many entries are kept. */
+export declare const MAX_LOG_ENTRIES = 200;
+/** Hard cap on the in-page reasoning log: how many reasoning characters are kept. */
+export declare const MAX_LOG_CHARS = 262144;
+/**
+ * Trim a reasoning log to the newest entries that fit both caps. The log lives
+ * in page memory rather than a file, but it grows with every move and the
+ * settings page renders it, so it needs a ceiling all the same.
+ * @param log - the log to trim, oldest first.
+ * @returns a new array holding the newest entries inside both caps.
+ */
+export declare function trimLog(log: readonly ReasoningEntry[]): ReasoningEntry[];

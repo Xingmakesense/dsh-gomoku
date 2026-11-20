@@ -50,6 +50,18 @@ export type GomokuSide = 'black' | 'white';
  * when the move follows the model's own default effort.
  */
 export type GomokuThinking = string;
+/**
+ * The fastest reasoning effort a model declares: "off" when it offers one,
+ * otherwise its first (least) declared effort. A move retried after a failure
+ * runs the same model at this effort, so a slow or truncated first attempt
+ * still leaves room for a quick second one inside the same deadline.
+ * @param efforts - declared efforts, ordered least to greatest.
+ * @returns the effort id for the fast retry, or undefined when the model
+ *   declares none (its own default then applies).
+ */
+export declare function fastestEffort(efforts: readonly {
+    id: string;
+}[]): string | undefined;
 /** Required plugin configuration. */
 export interface Config {
     /** End-to-end deadline for one AI move request (all attempts), in milliseconds. */

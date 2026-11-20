@@ -278,9 +278,9 @@ function gameOver(game: GameState): boolean {
   return game.winner !== EMPTY || game.draw
 }
 
-/** Publish one game state to all subscribers. */
+/** Publish one game state to all subscribers, trimming the reasoning log. */
 function commitGame(game: GameState): void {
-  snapshot = { ...snapshot, game }
+  snapshot = { ...snapshot, game: { ...game, log: trimLog(game.log) } }
   for (const listener of [...listeners]) listener()
 }
 
@@ -500,8 +500,34 @@ export function retryMove(): void {
   scheduleAi()
 }
 
+/** Drop the current game's reasoning log (the board, settings and turn stay). */
+export function clearLog(): void {
+  commitGame({ ...snapshot.game, log: [] })
+}
+
 /** Max AI attempts per move before the move fails (rejected moves retry). */
 const MAX_AI_ATTEMPTS = 3
+
+/** Hard cap on the in-page reasoning log: how many entries are kept. */
+export const MAX_LOG_ENTRIES = 200
+/** Hard cap on the in-page reasoning log: how many reasoning characters are kept. */
+export const MAX_LOG_CHARS = 262_144
+
+/**
+ * Trim a reasoning log to the newest entries that fit both caps. The log lives
+ * in page memory rather than a file, but it grows with every move and the
+ * settings page renders it, so it needs a ceiling all the same.
+ * @param log - the log to trim, oldest first.
+ * @returns a new array holding the newest entries inside both caps.
+ */
+export function trimLog(log: readonly ReasoningEntry[]): ReasoningEntry[] {
+  const kept = log.length > MAX_LOG_ENTRIES ? log.slice(log.length - MAX_LOG_ENTRIES) : [...log]
+  let chars = kept.reduce((sum, entry) => sum + entry.reasoning.length, 0)
+  while (kept.length > 1 && chars > MAX_LOG_CHARS) {
+    chars -= kept.shift()!.reasoning.length
+  }
+  return kept
+}
 
 /** The side model selection for one turn color. */
 function sideModelOf(settings: SettingsState, turn: Cell): SideModel {

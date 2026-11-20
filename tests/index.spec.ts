@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   BLACK, BOARD_SIZE, DEFAULT_SYSTEM_PROMPT, EMPTY, GOMOKU_PATH, WHITE,
-  boardText, buildMoveUserMessage, isLegalMove, isRetryableMoveFailure, parseMoveReply, validateMoveRequest,
+  boardText, buildMoveUserMessage, fastestEffort, isLegalMove, isRetryableMoveFailure, parseMoveReply, validateMoveRequest,
 } from '../src/index.ts'
 import { MAX_CANDIDATES, MAX_MOVE_OUTPUT_TOKENS, MOVE_TIMEOUT_MS, MOVE_TIMEOUT_SECONDS } from '../src/limits.ts'
 
@@ -221,6 +221,14 @@ describe('default system prompt', () => {
     // dominate a move request, so the prompt must stay well under the old
     // example-laden text (~5300 chars).
     expect(DEFAULT_SYSTEM_PROMPT.length).toBeLessThan(2400)
+  })
+})
+
+describe('fastestEffort', () => {
+  it('prefers off, then the least declared effort, then none', () => {
+    expect(fastestEffort([{ id: 'off' }, { id: 'high' }])).toBe('off')
+    expect(fastestEffort([{ id: 'low' }, { id: 'high' }, { id: 'max' }])).toBe('low')
+    expect(fastestEffort([])).toBeUndefined()
   })
 })
 

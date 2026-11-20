@@ -13,6 +13,8 @@ export declare const zh: {
     'settings.jev': string;
     'settings.reset': string;
     'settings.reset.done': string;
+    'settings.log.clear': string;
+    'settings.log.cleared': string;
     'jev.key.label': string;
     'jev.key.placeholder': string;
     'jev.key.replace': string;
@@ -88,6 +90,8 @@ export declare const en: {
     'settings.jev': string;
     'settings.reset': string;
     'settings.reset.done': string;
+    'settings.log.clear': string;
+    'settings.log.cleared': string;
     'jev.key.label': string;
     'jev.key.placeholder': string;
     'jev.key.replace': string;

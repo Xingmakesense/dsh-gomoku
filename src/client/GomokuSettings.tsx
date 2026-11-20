@@ -13,7 +13,7 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { GomokuT } from './i18n.ts'
 import { type Thinking } from './game.ts'
 import {
-  getSnapshot, loadModels, patchSettings, resetSettings, subscribe,
+  clearLog, getSnapshot, loadModels, patchSettings, resetSettings, subscribe,
   type ModelGroup, type ReasoningEntry, type SettingsState, type SideModel,
 } from './store.ts'
 import css from './Gomoku.module.css'
@@ -346,14 +346,19 @@ export function GomokuSettings({ t }: GomokuSettingsProps) {
   const { game, settings } = useSyncExternalStore(subscribe, getSnapshot)
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set())
   const [resetDone, setResetDone] = useState(false)
+  const [logCleared, setLogCleared] = useState(false)
   const resetTimer = useRef<number | undefined>(undefined)
+  const logTimer = useRef<number | undefined>(undefined)
   // Publish the host's active appearance on this page's root so native chrome
   // (scrollbars, carets, the OS-drawn parts of inputs) matches the palette.
   const rootRef = useRef<HTMLDivElement>(null)
   const scheme = useColorScheme(rootRef)
 
   useEffect(() => { loadModels() }, [])
-  useEffect(() => () => { window.clearTimeout(resetTimer.current) }, [])
+  useEffect(() => () => {
+    window.clearTimeout(resetTimer.current)
+    window.clearTimeout(logTimer.current)
+  }, [])
 
   const toggleEntry = (n: number): void => {
     setExpanded(prev => {
@@ -369,6 +374,15 @@ export function GomokuSettings({ t }: GomokuSettingsProps) {
     setResetDone(true)
     window.clearTimeout(resetTimer.current)
     resetTimer.current = window.setTimeout(() => setResetDone(false), 1800)
+  }
+
+  /** Drop both the page log and the node half's diagnostics ring. */
+  const handleClearLog = (): void => {
+    clearLog()
+    void fetch('/plugins/gomoku/log', { method: 'DELETE' }).catch(() => { /* log already cleared locally */ })
+    setLogCleared(true)
+    window.clearTimeout(logTimer.current)
+    logTimer.current = window.setTimeout(() => setLogCleared(false), 1800)
   }
 
   return (
@@ -414,6 +428,8 @@ export function GomokuSettings({ t }: GomokuSettingsProps) {
       </section>
 
       <div className={css.settingsFooter}>
+        <button type="button" className={css.ghost} onClick={handleClearLog}>{t('settings.log.clear')}</button>
+        {logCleared && <span className={css.flash} role="status">{t('settings.log.cleared')}</span>}
         <button type="button" className={css.ghost} onClick={handleReset}>{t('settings.reset')}</button>
         {resetDone && <span className={css.flash} role="status">{t('settings.reset.done')}</span>}
       </div>

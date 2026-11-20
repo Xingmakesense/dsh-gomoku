@@ -33,7 +33,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { BlockAssembler, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import {
-  MAX_CANDIDATES, MAX_MOVE_ATTEMPTS, MAX_MOVE_OUTPUT_TOKENS, MOVE_TIMEOUT_MS, MOVE_TIMEOUT_SECONDS,
+  FAST_RETRY_RESERVE_MS, MAX_CANDIDATES, MAX_MOVE_ATTEMPTS, MAX_MOVE_OUTPUT_TOKENS, MOVE_TIMEOUT_MS, MOVE_TIMEOUT_SECONDS,
 } from './limits.ts'
 import type {
   ContentBlock, FinishReason, GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, RequestUserInput, TokenUsage,
@@ -70,6 +70,20 @@ export type GomokuSide = 'black' | 'white'
  * when the move follows the model's own default effort.
  */
 export type GomokuThinking = string
+
+/**
+ * The fastest reasoning effort a model declares: "off" when it offers one,
+ * otherwise its first (least) declared effort. A move retried after a failure
+ * runs the same model at this effort, so a slow or truncated first attempt
+ * still leaves room for a quick second one inside the same deadline.
+ * @param efforts - declared efforts, ordered least to greatest.
+ * @returns the effort id for the fast retry, or undefined when the model
+ *   declares none (its own default then applies).
+ */
+export function fastestEffort(efforts: readonly { id: string }[]): string | undefined {
+  if (efforts.some(effort => effort.id === 'off')) return 'off'
+  return efforts.length > 0 ? efforts[0]!.id : undefined
+}
 
 /** Required plugin configuration. */
 export interface Config {
@@ -412,6 +426,8 @@ async function cachedModelInfo(
  * @param user - the user message for this attempt.
  * @param maxTokens - the output-token cap for this attempt (per-request override or config default).
  * @param signal - cancellation (request deadline / plugin disposal).
+ * @param thinking - the effort to request for this attempt (the first attempt
+ *   uses the user's choice, retries use the model's fastest effort).
  * @returns the assembled reply text, the reasoning text, and the truncation flag.
  * @throws when the stream fails or the model produced no text at all.
  */
@@ -422,15 +438,16 @@ async function streamMoveText(
   user: RequestUserInput,
   maxTokens: number,
   signal: AbortSignal,
+  thinking: string | undefined,
 ): Promise<MoveAttemptText> {
   if (request.provider === JEV_PROVIDER) {
     return requestJevMove(request.board, request.side, system, request.jevApiKey!, signal)
   }
   const info = await cachedModelInfo(ctx, request.provider, request.model, signal)
   let reasoningEffort: ReasoningEffortId | undefined
-  if (request.thinking !== undefined
-    && info.reasoning?.efforts.some(effort => effort.id === request.thinking)) {
-    reasoningEffort = ReasoningEffortId(request.thinking)
+  if (thinking !== undefined
+    && info.reasoning?.efforts.some(effort => effort.id === thinking)) {
+    reasoningEffort = ReasoningEffortId(thinking)
   }
   // Never ask for more output than the model advertises: an oversized budget
   // is rejected by some providers and otherwise just invites runaway thinking.
@@ -593,6 +610,8 @@ export function apply(ctx: Context, config: Config): void {
 
   /** How many finished moves the diagnostics ring keeps. */
   const MOVE_LOG_LIMIT = 40
+  /** Byte ceiling of the diagnostics ring, so a long session cannot grow it without bound. */
+  const MOVE_LOG_MAX_BYTES = 32_768
   /** Finished moves of this plugin instance, newest last. */
   const moveLog: MoveLogEntry[] = []
 
@@ -660,6 +679,14 @@ export function apply(ctx: Context, config: Config): void {
             writeJson(200, { entries: moveLog })
             return
           }
+          if (req.method === 'DELETE' && segments.length === 1 && segments[0] === 'log') {
+            // Explicit user action from the settings page. The ring is the only
+            // unbounded record this plugin keeps, so clearing it never touches
+            // the game itself.
+            moveLog.length = 0
+            writeJson(200, { cleared: true })
+            return
+          }
           if (req.method === 'GET' && segments.length === 1 && segments[0] === 'models') {
             const groups: ModelGroupWire[] = []
             const failures: ModelFailureWire[] = []
@@ -720,7 +747,11 @@ export function apply(ctx: Context, config: Config): void {
                 ...(usage !== undefined ? { usage } : {}),
                 ...(attemptText?.maxTokens !== undefined ? { maxTokens: attemptText.maxTokens } : {}),
               })
-              if (moveLog.length > MOVE_LOG_LIMIT) moveLog.splice(0, moveLog.length - MOVE_LOG_LIMIT)
+              while (moveLog.length > MOVE_LOG_LIMIT) moveLog.shift()
+              while (moveLog.length > 1
+                && Buffer.byteLength(JSON.stringify(moveLog), 'utf8') > MOVE_LOG_MAX_BYTES) {
+                moveLog.shift()
+              }
               ctx.logger.info(
                 'gomoku: %s move via %s/%s took %dms over %d attempt(s)%s: %s',
                 request.side, request.provider, request.model, elapsed(), attempts,
@@ -739,6 +770,21 @@ export function apply(ctx: Context, config: Config): void {
               const system = request.system !== undefined && request.system.trim().length > 0
                 ? request.system
                 : DEFAULT_SYSTEM_PROMPT
+              // The cheapest effort the model declares: every attempt after the
+              // first runs the same route with it, so a slow or truncated first
+              // attempt still leaves time for a quick second one.
+              let fastEffort: string | undefined
+              if (request.provider !== JEV_PROVIDER) {
+                try {
+                  const info = await cachedModelInfo(ctx, request.provider, request.model, controller.signal)
+                  fastEffort = fastestEffort(info.reasoning?.efforts ?? [])
+                } catch (error) {
+                  ctx.logger.warn(
+                    'gomoku: cannot resolve the fast retry effort: %s',
+                    error instanceof Error ? error.message : String(error),
+                  )
+                }
+              }
               let lastText: string | undefined
               let lastReason: string | undefined
               let lastReasoning = ''
@@ -747,25 +793,45 @@ export function apply(ctx: Context, config: Config): void {
               for (let attempt = 1; attempt <= resolved.maxMoveAttempts; attempt += 1) {
                 attemptsUsed = attempt
                 const user = buildMoveUserMessage(request, lastText, lastReason)
+                const remainingMs = effectiveTimeoutMs - elapsed()
+                if (remainingMs <= 0) break
+                // Keep a slice of the deadline for the fast retry: a slow first
+                // attempt must not eat the whole budget, or the handoff would
+                // have no time left to run in.
+                const attemptBudgetMs = Math.min(
+                  attempt === 1 && resolved.maxMoveAttempts > 1
+                    ? Math.max(3_000, effectiveTimeoutMs - FAST_RETRY_RESERVE_MS)
+                    : remainingMs,
+                  remainingMs,
+                )
+                const attemptController = new AbortController()
+                const attemptTimer = setTimeout(
+                  () => attemptController.abort(new Error('gomoku: AI 落子超时')),
+                  attemptBudgetMs,
+                )
+                const attemptSignal = AbortSignal.any([controller.signal, attemptController.signal])
                 let attemptText: MoveAttemptText
                 try {
-                  attemptText = await streamMoveText(ctx, request, system, user, effectiveMaxTokens, controller.signal)
+                  attemptText = await streamMoveText(
+                    ctx, request, system, user, effectiveMaxTokens, attemptSignal,
+                    attempt === 1 ? request.thinking : fastEffort,
+                  )
                 } catch (error) {
-                  // A transient stream failure (the connection dropped
-                  // mid-response, a provider rate limit, ...) is worth one more
-                  // attempt — the model never saw a completed reply, so retry
-                  // without corrective feedback. The last attempt falls through
-                  // to the bounded failure response below instead of a raw 400.
-                  // Each retry backs off first: an immediate retry just hits the
-                  // same rate limit again and burns the attempt budget.
-                  if (!isRetryableMoveFailure(error)) throw error
+                  // The reserved slice expiring is a normal failure: the next
+                  // attempt (same model, cheapest effort) takes over. A
+                  // transient stream failure is retried the same way; a hard
+                  // failure still propagates.
+                  const sliceExpired = attemptController.signal.aborted && !controller.signal.aborted
+                  if (!sliceExpired && !isRetryableMoveFailure(error)) throw error
                   lastText = undefined
-                  lastReason = error instanceof Error ? error.message : String(error)
+                  lastReason = sliceExpired
+                    ? '首次尝试超时，已切到快速重试'
+                    : error instanceof Error ? error.message : String(error)
                   // A failed stream carries no usable reasoning; drop any
                   // earlier attempt's text so the error response stays honest.
                   lastReasoning = ''
                   ctx.logger.warn(
-                    'gomoku: transient AI move failure (attempt %d/%d): %s',
+                    'gomoku: AI move attempt %d/%d failed: %s',
                     attempt, resolved.maxMoveAttempts, lastReason,
                   )
                   if (attempt < resolved.maxMoveAttempts) {
@@ -773,6 +839,8 @@ export function apply(ctx: Context, config: Config): void {
                     continue
                   }
                   break
+                } finally {
+                  clearTimeout(attemptTimer)
                 }
                 const text = attemptText.text
                 lastAttempt = attemptText
