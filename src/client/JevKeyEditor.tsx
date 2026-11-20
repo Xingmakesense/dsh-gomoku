@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 import { isValidJevApiKey } from '../jev-shared.ts'
-import type { GomokuT } from './GomokuView.tsx'
+import type { GomokuT } from './i18n.ts'
 import css from './Gomoku.module.css'
 
 /** Saved keys stay in page memory and never refill the password input. */

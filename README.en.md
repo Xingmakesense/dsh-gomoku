@@ -2,7 +2,7 @@
 
 # Gomoku · Play a Game Against AI Inside DSH
 
-![dsh-gomoku](assets/screenshot.png)
+<p align="center"><img src="assets/screenshot.png" width="400" alt="Board page" /> <img src="assets/settings.png" width="760" alt="Settings page" /></p>
 
 Tired of making the AI write code and build spreadsheets for you? This time it sits down across the board from you. `@yejiming/dsh-gomoku` is a gomoku plugin for DeepSeek Harness: it registers a Gomoku page through Better Sidebar's tab registry (`dsh-better-sidebar`), putting a 15×15 board in the right sidebar so you can play against DeepSeek — or any model you configure.
 
@@ -14,13 +14,14 @@ And the most considerate touch: the board page opens and closes whenever you lik
 
 ## Key Features
 
-- **Better Sidebar page**: the browser half registers the Gomoku page through `ctx.betterSidebar.registerTab`, so it opens from Better Sidebar's + menu; the plugin requires `dsh-better-sidebar` 0.32.1 or newer.
+- **Better Sidebar page**: the browser half registers the Gomoku page through `ctx.betterSidebar.registerTab`, so it opens from Better Sidebar's + menu; the plugin requires `dsh-better-sidebar` 0.32.1 or newer. The board page keeps only the board and the game-start controls.
+- **A settings page of its own**: models, thinking levels, system prompts and the Jev credential live in Settings → Gomoku, together with the current game's reasoning log. Choices are saved locally (the Jev key stays in page memory) and a mid-game change applies from the next move.
 - **Human-vs-AI and AI-vs-AI**: three modes — play black, play white, or AI-vs-AI — on a 15×15 board with free-style (no forbidden moves) rules (double-threes, double-fours, and overlines are all legal; five or more in a row wins). The mode switch and New Game button sit below the board.
-- **Separate AI settings for black and white**: each side picks its own model and thinking level (Off / High / Max) independently; unsupported levels automatically fall back to the model's default.
-- **Reasoning shown per side**: each side's reasoning log lives in its own collapsible AI panel below the board (the same panel as its model and prompt settings), collapsed by default; click a move to expand its full reasoning text.
+- **Separate AI settings for black and white**: each side picks its own model and thinking level (Off / High / Max) in the settings page independently; unsupported levels automatically fall back to the model's default.
+- **Reasoning shown per side**: each side's reasoning log lives in its own panel in the settings page (next to its model and prompt), collapsed by default; click a move to expand its full reasoning text.
 - **Pause and take over manually**: the Pause button to the right of the New Game button below the board interrupts AI thinking at any time (both are icon + text capsule buttons: ⟳ New Game, ⏸ Pause, ▶ Resume; the button turns amber while paused). While paused you may place stones for both sides in turn with no move limit; AI thinking resumes when you click Resume.
 - **Fixed timeout and output cap**: the end-to-end timeout for a single move is fixed at 3000000 ms (3000 s) and the output token cap at 32000, sent with every move request, not exposed in the UI.
-- **Editable prompts for both sides**: black's and white's system prompts are always visible and editable in their own collapsible panels below the board, each with a one-click restore to default. The defaults cover the rules, terminology (live two / sleeping three / live three / double live three / four-three / defensive points, each with a JSON example), a mandatory thinking flow (enumerate threats → analyze candidates → synthesize), and high-level few-shot game examples (each with a sample return).
+- **Editable prompts for both sides**: black's and white's system prompts are always editable in the settings page, each with a one-click restore to default. The default prompt is a compact threat-first procedure (about 760 characters): win/block a five, handle fours, live threes and double threats, then pick the best of at most 6 candidate points by attack-and-defense value. A shorter prompt keeps the model's budget on the position itself for faster thinking and more direct moves.
 - **Closing the sidebar doesn't stop the game**: the game state lives in a browser-side store; closing the sidebar, switching tabs, or collapsing the page neither resets the game nor interrupts in-flight AI thinking — keep using Harness's main features while playing. All conversations in the same browser page share one game.
 - **Automatic retry on transient failures**: interrupted streaming responses (dropped connections, rate limits, and other transient transport failures) are retried within the attempt budget instead of failing the whole move.
 
@@ -106,7 +107,7 @@ If that profile is already running, restart it and refresh the browser, then ope
 
 ## Architecture
 
-The game itself (state, turns, win detection) lives in the browser UI, registered as a page through Better Sidebar's `registerTab`; the server only arbitrates AI moves, so illegal replies are rejected server-side and never corrupt the browser-side board. The game uses free-style gomoku (no forbidden moves): black may freely play double-threes, double-fours, and overlines — five or more in a row in any direction wins. The rules, return format, pre-move thinking flow, tactics, and examples all live in the default system prompt; you can edit the prompts in the UI, and the edited text is sent verbatim as the system prompt.
+The game itself (state, turns, win detection) lives in the browser UI, registered as a page through Better Sidebar's `registerTab`; the server only arbitrates AI moves, so illegal replies are rejected server-side and never corrupt the browser-side board. The game uses free-style gomoku (no forbidden moves): black may freely play double-threes, double-fours, and overlines — five or more in a row in any direction wins. The rules, return format, threat priority, candidate scoring and output constraints all live in the default system prompt; you can edit the prompts in the UI, and the edited text is sent verbatim as the system prompt.
 
 ## Configuration
 
@@ -124,74 +125,42 @@ Every field has a loader default; there are no library-level defaults.
 
 #### What the model sees
 
-Every AI move is an independent auxiliary request routed to the selected provider/model. The system prompt is the per-side edited text (editable at any time in the collapsible panels below the board); for an unedited side, the package default below is used. The single user message contains the 15×15 board as text (first row is the column labels, then 15 rows each starting with the row number and one `B`/`W`/`·` character per intersection), the side the AI plays, and — on retry — the previous illegal reply with the rejection reason. Move requests may carry a thinking level (`off`/`high`/`max`): the server forwards it as the request's reasoning effort only when the selected model declares support for that level; unsupported levels fall back to the model's own default instead of failing the request. The browser always sends per-request overrides for `moveTimeoutMs` (3000000) and `maxMoveOutputTokens` (32000). Reasoning blocks in replies are returned to the browser in a `reasoning` field along with the move, draw, or error result.
+Every AI move is an independent auxiliary request routed to the selected provider/model. The system prompt is the per-side edited text (editable at any time in Settings → Gomoku); for an unedited side, the package default below is used. The single user message contains the 15×15 board as text (first row is the column labels, then 15 rows each starting with the row number and one `B`/`W`/`·` character per intersection), the side the AI plays, and — on retry — the previous illegal reply with the rejection reason. Move requests may carry a thinking level (`off`/`high`/`max`): the server forwards it as the request's reasoning effort only when the selected model declares support for that level; unsupported levels fall back to the model's own default instead of failing the request. The browser always sends per-request overrides for `moveTimeoutMs` (3000000) and `maxMoveOutputTokens` (32000). Reasoning blocks in replies are returned to the browser in a `reasoning` field along with the move, draw, or error result.
 
 ##### Verbatim text for this field (本字段的原文)
 
 The block below is the exact default system prompt shipped with the package (in Chinese); unedited sides send it verbatim with every move request.
 
 ```markdown
-你是五子棋对局引擎（无禁手规则）。请根据给定的棋盘局面，为你的执子方选择一步合法落子，并严格按照规定的 JSON 格式返回。
+你是五子棋落子引擎（无禁手，任意方向连成 5 子及以上即胜）。为指定执子方选择当前最优的一步合法空点。判断在内部完成，只输出 JSON。
 
-# 术语解释（每个概念附一条 JSON 示范；坐标 (r,c) 表示第 r 行第 c 列，即 [r, c]）
-- 活二：两子相连，且两端都能继续延伸。
-  {"概念": "活二", "示范": "白子 (5,5)(5,6)，(5,4) 与 (5,7) 均为空"}
-- 冲三：三子相连，只有一端开口，下一步可成冲四。
-  {"概念": "冲三", "示范": "黑子 (3,0)(3,1)(3,2)，仅 (3,3) 一端为空"}
-- 活三：三子相连，两端都是空位，下一步可成活四；对手出现活三时，必须立即堵住其中一端。
-  {"概念": "活三", "示范": "黑子 (3,3)(3,4)(3,5)，两端 (3,2) 与 (3,6) 均为空", "应对": {"move": [3, 2]}}
-- 冲四：四子相连，只有一端开口，下一步即成五；必须立即堵住开口端。
-  {"概念": "冲四", "示范": "黑子 (3,3)(3,4)(3,5)(3,6)，(3,2) 已有白子，仅 (3,7) 一端为空", "应对": {"move": [3, 7]}}
-- 活四：四子相连，两端都是空位，下一步必成五，无法阻挡。
-  {"概念": "活四", "示范": "白子 (7,3)(7,4)(7,5)(7,6)，两端 (7,2) 与 (7,7) 均为空"}
-- 五连：任意方向连续 5 颗及以上己方棋子，即获胜（长连同样算赢）。
-  {"概念": "五连", "示范": "黑子 (8,5)(8,6)(8,7)(8,8)(8,9) 连成五子，黑方直接获胜"}
+# 快速判断（按优先级，命中即停）
+1. 己方成五：任一方向己方已有连续 4 子（含跳四）且空端可成五 → 立即落子取胜。
+2. 对手成五：对手 4 子的成五点 → 必须封堵；若对手活四无法单点封堵，则改走己方最快取胜点。
+3. 己方强攻：能形成活四、冲四或「四三」的点优先；冲四可迫使对手应手，为下一手争取先手。
+4. 对手活三：立即封堵其一端；若一子能同时封堵两个威胁（双防点），优先选双防点。
+5. 己方活三/双活三：无紧急威胁时，选择能形成活三、双活三或多方向连线的点。
+6. 布局：靠近天元与双方已有棋群，保持连线；避免边角、孤立与没有后续的落点。
 
-# 棋盘
-- 棋盘为 15×15，共 225 个交叉点。行 row 与列 col 均从 0 到 14，坐标写作 [row, col]。
-- 棋盘在消息中以 16 行文本给出：第 1 行是列号（0 到 14，与每列对齐），随后 15 行每行以行号开头，后面是该行的 15 个交叉点，每格一个字符：`B` 表示黑子，`W` 表示白子，`·` 表示空交叉点。
-- 黑方先手，双方轮流落子；每一步只能落一子，且必须落在空交叉点上。
+# 术语
+活三＝3 连且两端可延伸（下一步可成活四）；冲四＝4 连且仅一端可成五；活四＝两端均可成五、无法单点封堵；双活三/四三＝一子同时形成两个活三 / 冲四加活三，均为强杀。
 
-# 胜负规则
-- 任意一方在横、竖或两条斜线（共 4 个方向）中的任一方向上，率先形成连续 5 颗及以上己方棋子，即获得胜利。
-- 本局采用无禁手规则：黑方没有任何落子限制。专业规则中禁止的「双三」「双四」「长连」（连续六子及以上）在本局中全部允许——只要连成五子及以上，无论用什么手段都算赢。
-- 棋盘没有空位且无人获胜时为和棋。
+# 候选比较（最多评估 6 个点）
+- 只考虑现有棋子 2 格以内的空点；黑方首手固定天元 (7,7)。
+- 评分＝进攻价值（成 5 > 活四 > 冲四 > 活三 > 双三/四三 > 活二）＋防守价值（封成 5 > 封冲四 > 封活三/双防）。
+- 同分依次比较：能否强制对手应手 → 是否连接更多棋子 → 是否更靠近中心。
+- 宁可下在能持续进攻的要点，也不下没有后续的孤子。
 
-# 基本战术（落子前逐条检查；沿横、竖、两条斜线共 4 个方向分别扫描双方棋型；每条附返回案例）
-1. 取胜优先：若本步能直接形成五连（包括把己方四连补成五连），立即落子取胜，不要贪图其他棋型。
-   案例：黑方执子，黑方在 (6,6)(6,7)(6,8)(6,9) 已有四连，(6,10) 为空。
-   返回：{"move": [6, 10]}
-2. 必防冲四：若对手已有四连且只差一子即成五，必须立即堵住其成五点（四连只有一端开口时堵住开口端），否则对手下一步直接获胜。
-   案例：白方执子，黑方在 (4,4)(4,5)(4,6)(4,7) 已有四连，(4,3) 已有白子，只剩 (4,8) 一个成五点。
-   返回：{"move": [4, 8]}
-3. 活三必挡：若对手已形成活三（三连且两端都是空位），必须立即堵住其中一端；否则对手下一步形成两端都能成五的活四，将无法阻止。
-   案例：黑方执子，白方在 (7,3)(7,4)(7,5) 连成三子，两端 (7,2) 与 (7,6) 均为空。
-   返回：{"move": [7, 2]}
-4. 主动进攻：没有上述威胁时，优先落子让己方形成活三或冲四；落子尽量靠近己方已有棋子并保持连线，不要下在远离棋子的孤立位置。
-   案例：黑方执子，黑方已有 (5,5)(5,6) 两连，(5,4) 为空，在 (5,4) 落子可形成两端 (5,3)(5,7) 皆空的活三。
-   返回：{"move": [5, 4]}
-5. 双重威胁：一个落点若能同时形成两个威胁（如双三、四三）应优先选择；防守时若能一子同时堵住对手多个威胁则更佳。
-   案例：黑方执子，黑方已有横向 (5,3)(5,4) 与纵向 (3,5)(4,5) 各两连，在 (5,5) 落子可同时形成两个活三（双活三）。
-   返回：{"move": [5, 5]}
-
-# 返回格式（必须严格遵守）
-只返回一个 JSON 对象，不要输出任何思考过程、解释、Markdown 代码块或前后缀（思考会占用输出预算，导致回复被截断）：
-- 正常落子：{"move": [row, col]}
-- 和棋：{"draw": true}
-- 局面无法理解：{"error": "一句话说明原因"}
-
-# 正确案例
-示例 1：黑方执子。棋盘上第 7 行第 8 列（row=7, col=8）为空，黑方在此落子即可形成连续五子并获胜。
-返回：{"move": [7, 8]}
-错误示范（禁止返回）："我认为应该下在这里。{"move": [7, 8]}" —— 带解释的文字不是合法输出。
-
-# 坐标校验
-row 与 col 必须是 0 到 14 的整数，且目标交叉点必须为空；违反任何一条都是非法落子，你会收到纠正提示并重新选择。
+# 输出（严格遵守）
+只输出一行 JSON，不要解释或 Markdown：{"move": [row, col]}
+和棋：{"draw": true}
+无法判断：{"error": "一句话原因"}
+row、col 为 0–14 的整数，目标点必须为空。
 ```
 
 #### Token effect
 
-Auxiliary requests cost tokens for the board construction (about 530 fixed characters — the labeled board plus sentence framing — plus the user-edited prompt) and `maxMoveOutputTokens` (default 32000). Thinking levels above `off` add the model's reasoning tokens, counted against the same output budget. The request is independent of any agent conversation and is never written to the session log. Replies that hit the output cap are still first parsed for a complete JSON object; only a failed parse counts as a failed attempt.
+Auxiliary requests cost tokens for the prompt (about 760 characters of default prompt plus the labeled board, around 530 characters) and `maxMoveOutputTokens` (default 32000). Thinking levels above `off` add the model's reasoning tokens, counted against the same output budget. The request is independent of any agent conversation and is never written to the session log. Replies that hit the output cap are still first parsed for a complete JSON object; only a failed parse counts as a failed attempt.
 
 #### KV Cache effect
 

@@ -60,16 +60,14 @@ export declare const Config: z<Config>;
 /** Route prefix owned by this plugin (the browser half calls under it). */
 export declare const GOMOKU_PATH = "/plugins/gomoku";
 /**
- * The default system prompt: freestyle (no forbidden moves) gomoku rules,
- * terminology with JSON demonstrations (live twos, threes, sleep threes,
- * fours, double live threes, four-three kills, key defensive points, five),
- * the strict JSON return format, a mandatory pre-move thinking flow
- * (enumerate own fours, block opponent fours, list live-three candidates,
- * evaluate 3-5 candidates, pick the best), basic tactics each with a worked
- * return case, high-level few-shot games showing the full threat-enumeration
- * → candidate-analysis → judgment process, and an explicit wrong example.
- * Users may edit this text in the browser half; the edited text replaces it
- * verbatim per move request.
+ * The default system prompt: freestyle (no forbidden moves) gomoku rules, a
+ * strict threat-first priority list (win → block a five → four/three
+ * combinations → block a live three → build threats), a bounded candidate
+ * scan with a compact scoring rule, and the strict JSON return format. Kept
+ * deliberately short: the board text and the model's hidden thinking dominate
+ * a move request, so a compact prompt is faster and leaves more budget for
+ * play. Users may edit this text in Settings → Gomoku; the edited text
+ * replaces it verbatim per move request.
  */
 export declare const DEFAULT_SYSTEM_PROMPT: string;
 /** The wire shape of one model group served to the browser half. */

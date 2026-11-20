@@ -6,7 +6,14 @@ export const NS = 'gomoku'
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   'tab.label': '五子棋',
-  'tab.description': '和 AI 下一盘 15×15 无禁手五子棋',
+  'tab.description': '和 AI 下一盘 15×15 无禁手五子棋；模型与提示词在设置页调整',
+  'board.settings.hint': '模型、思考档位与提示词：设置 → 五子棋',
+  'settings.label': '五子棋',
+  'settings.title': '五子棋设置',
+  'settings.intro': '设置黑白两方的模型、思考档位与提示词，并查看当前对局的思考记录。这些设置会自动保存，对局进行中修改会在下一手生效。',
+  'settings.jev': 'Jev 访问凭据',
+  'settings.reset': '恢复默认设置',
+  'settings.reset.done': '已恢复默认设置',
   'jev.key.label': 'Jev API Key',
   'jev.key.placeholder': '输入 TypeSafe API Key',
   'jev.key.replace': '输入新 Key 以替换',
@@ -67,7 +74,14 @@ export type GomokuKey = keyof typeof zh
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
   'tab.label': 'Gomoku',
-  'tab.description': 'Play 15×15 freestyle Gomoku against your models',
+  'tab.description': 'Play 15×15 freestyle Gomoku against your models; models and prompts live in Settings',
+  'board.settings.hint': 'Models, thinking level and prompts: Settings → Gomoku',
+  'settings.label': 'Gomoku',
+  'settings.title': 'Gomoku settings',
+  'settings.intro': 'Choose the model, thinking level and prompt for each side, and review the reasoning of the current game. Settings are saved automatically and apply from the next move, even mid-game.',
+  'settings.jev': 'Jev credential',
+  'settings.reset': 'Restore defaults',
+  'settings.reset.done': 'Defaults restored',
   'jev.key.label': 'Jev API Key',
   'jev.key.placeholder': 'Enter your TypeSafe API key',
   'jev.key.replace': 'Enter a new key to replace it',

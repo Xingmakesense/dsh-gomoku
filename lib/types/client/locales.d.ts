@@ -5,6 +5,13 @@ export declare const NS = "gomoku";
 export declare const zh: {
     'tab.label': string;
     'tab.description': string;
+    'board.settings.hint': string;
+    'settings.label': string;
+    'settings.title': string;
+    'settings.intro': string;
+    'settings.jev': string;
+    'settings.reset': string;
+    'settings.reset.done': string;
     'jev.key.label': string;
     'jev.key.placeholder': string;
     'jev.key.replace': string;
@@ -64,6 +71,13 @@ export type GomokuKey = keyof typeof zh;
 export declare const en: {
     'tab.label': string;
     'tab.description': string;
+    'board.settings.hint': string;
+    'settings.label': string;
+    'settings.title': string;
+    'settings.intro': string;
+    'settings.jev': string;
+    'settings.reset': string;
+    'settings.reset.done': string;
     'jev.key.label': string;
     'jev.key.placeholder': string;
     'jev.key.replace': string;

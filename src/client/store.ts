@@ -94,6 +94,80 @@ export const DEFAULT_MOVE_TIMEOUT_MS = 3_000_000
 /** The fixed per-move output-token cap (not user-adjustable). */
 export const DEFAULT_MAX_MOVE_OUTPUT_TOKENS = 32_000
 
+/** localStorage key of the persisted user settings (never the Jev key). */
+export const SETTINGS_STORAGE_KEY = 'dsh-gomoku:settings:v1'
+
+/** The user settings that survive a reload (the Jev key never does). */
+interface PersistedSettings {
+  mode?: GameMode
+  blackModel?: SideModel
+  whiteModel?: SideModel
+  blackThinking?: Thinking
+  whiteThinking?: Thinking
+  blackPrompt?: string
+  whitePrompt?: string
+}
+
+/** Whether a persisted value is a usable side-model selection. */
+function isSideModel(value: unknown): value is SideModel {
+  if (value === null || typeof value !== 'object') return false
+  const model = value as Record<string, unknown>
+  return (model.provider === undefined || typeof model.provider === 'string')
+    && (model.model === undefined || typeof model.model === 'string')
+}
+
+/** Whether a persisted value is a known thinking level. */
+function isThinking(value: unknown): value is Thinking {
+  return value === 'off' || value === 'high' || value === 'max'
+}
+
+/** Whether a persisted value is a known play mode. */
+function isMode(value: unknown): value is GameMode {
+  return value === 'black' || value === 'white' || value === 'both'
+}
+
+/** Load and shape-check the persisted settings; bad or missing data falls back to defaults. */
+function loadPersistedSettings(): PersistedSettings {
+  try {
+    if (typeof localStorage === 'undefined') return {}
+    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY)
+    if (raw === null) return {}
+    const parsed: unknown = JSON.parse(raw)
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const value = parsed as Record<string, unknown>
+    const saved: PersistedSettings = {}
+    if (isMode(value.mode)) saved.mode = value.mode
+    if (isSideModel(value.blackModel)) saved.blackModel = value.blackModel
+    if (isSideModel(value.whiteModel)) saved.whiteModel = value.whiteModel
+    if (isThinking(value.blackThinking)) saved.blackThinking = value.blackThinking
+    if (isThinking(value.whiteThinking)) saved.whiteThinking = value.whiteThinking
+    if (typeof value.blackPrompt === 'string') saved.blackPrompt = value.blackPrompt
+    if (typeof value.whitePrompt === 'string') saved.whitePrompt = value.whitePrompt
+    return saved
+  } catch {
+    return {}
+  }
+}
+
+/** Persist the user settings; a storage failure is non-fatal (the page keeps them in memory). */
+function persistSettings(settings: SettingsState): void {
+  if (typeof localStorage === 'undefined') return
+  const data: PersistedSettings = {
+    mode: settings.mode,
+    blackModel: settings.blackModel,
+    whiteModel: settings.whiteModel,
+    blackThinking: settings.blackThinking,
+    whiteThinking: settings.whiteThinking,
+    blackPrompt: settings.blackPrompt,
+    whitePrompt: settings.whitePrompt,
+  }
+  try {
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(data))
+  } catch {
+    /* quota/private mode: settings stay in memory for this page */
+  }
+}
+
 /** The whole store snapshot the view subscribes to. */
 export interface Snapshot {
   game: GameState
@@ -120,8 +194,8 @@ function freshGame(): GameState {
   }
 }
 
-/** The default settings (models fill in from the catalog fetch). */
-function freshSettings(): SettingsState {
+/** The built-in default settings (no persistence involved). */
+function defaultSettings(): SettingsState {
   return {
     mode: 'black',
     jevApiKey: '',
@@ -135,6 +209,21 @@ function freshSettings(): SettingsState {
     whitePrompt: undefined,
     groups: [],
     modelsError: undefined,
+  }
+}
+
+/** The default settings, overlaid with whatever the user persisted. */
+function freshSettings(): SettingsState {
+  const saved = loadPersistedSettings()
+  return {
+    ...defaultSettings(),
+    mode: saved.mode ?? 'black',
+    blackModel: saved.blackModel ?? { provider: undefined, model: undefined },
+    whiteModel: saved.whiteModel ?? { provider: undefined, model: undefined },
+    blackThinking: saved.blackThinking ?? 'off',
+    whiteThinking: saved.whiteThinking ?? 'off',
+    blackPrompt: saved.blackPrompt,
+    whitePrompt: saved.whitePrompt,
   }
 }
 
@@ -185,6 +274,7 @@ function commitGame(game: GameState): void {
 /** Publish one settings state to all subscribers. */
 function commitSettings(settings: SettingsState): void {
   snapshot = { ...snapshot, settings }
+  persistSettings(settings)
   for (const listener of [...listeners]) listener()
 }
 
@@ -219,6 +309,24 @@ function placed(game: GameState, row: number, col: number): GameState | null {
   return base
 }
 
+/**
+ * Fill an unset per-side selection from the first catalog model. A selection
+ * the user already made (or persisted) is never overwritten.
+ */
+function fillDefaultModels(settings: SettingsState): SettingsState {
+  const first = settings.groups[0]
+  if (first === undefined) return settings
+  const next = { ...settings }
+  const defaultModel = first.models[0]?.id
+  if (next.blackModel.provider === undefined) {
+    next.blackModel = { provider: first.provider, model: defaultModel }
+  }
+  if (next.whiteModel.provider === undefined) {
+    next.whiteModel = { provider: first.provider, model: defaultModel }
+  }
+  return next
+}
+
 /** Fetch the model catalog once; failures surface in settings.modelsError. */
 export function loadModels(): void {
   if (snapshot.settings.groups.length > 0) return
@@ -226,19 +334,7 @@ export function loadModels(): void {
     .then(response => response.json() as Promise<{ groups?: ModelGroup[]; failures?: { provider: string; error: string }[] }>)
     .then((body) => {
       const groups = body.groups ?? []
-      const next: SettingsState = { ...snapshot.settings, groups, modelsError: undefined }
-      if (groups.length > 0) {
-        // Both sides default to the first catalog model; the user can pick
-        // per-side models afterwards.
-        const first = groups[0]!
-        const defaultModel = first.models[0]?.id
-        if (next.blackModel.provider === undefined) {
-          next.blackModel = { provider: first.provider, model: defaultModel }
-        }
-        if (next.whiteModel.provider === undefined) {
-          next.whiteModel = { provider: first.provider, model: defaultModel }
-        }
-      }
+      const next = fillDefaultModels({ ...snapshot.settings, groups, modelsError: undefined })
       commitSettings(next)
     })
     .catch((error: unknown) => {
@@ -298,6 +394,18 @@ export function togglePause(): void {
 /** Apply one settings patch (model selection, thinking, overrides, prompt). */
 export function patchSettings(patch: Partial<SettingsState>): void {
   commitSettings({ ...snapshot.settings, ...patch })
+}
+
+/**
+ * Restore every user setting to its default (model/thinking/prompt/mode/Jev
+ * key) without touching the board or the loaded model catalog.
+ */
+export function resetSettings(): void {
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.removeItem(SETTINGS_STORAGE_KEY) } catch { /* page-memory only */ }
+  }
+  const { groups, modelsError } = snapshot.settings
+  commitSettings(fillDefaultModels({ ...defaultSettings(), groups, modelsError }))
 }
 
 /**

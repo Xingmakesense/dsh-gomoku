@@ -39,78 +39,125 @@
   --accent-soft: oklch(0.72 0.12 72 / 0.22);
   --cinnabar: oklch(0.55 0.17 30);
 
-  /* Serif voice for the status line and panel titles. */
+  /* Serif voice for the status line and headings. */
   --serif: "Songti SC", "STSong", "Noto Serif CJK SC", Georgia, "Times New Roman", serif;
 }
 
-/* Per-side AI panel card (a native <details> disclosure). */
-.sidePanel {
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--panel-bg);
-  overflow: hidden;
-}
-
-.panelTitle {
+/* Settings page (Settings → Gomoku). Same chrome tokens as the board page. */
+.settings {
+    /* Local design tokens: chrome (host-derived) + board (fixed, physical). */
+    --border: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.3));
+    --border-soft: var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
+    --panel-bg: var(--dsw-alias-bg-module-platform, rgba(128, 128, 128, 0.06));
+    --well-bg: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.07));
+    --interactive-hover: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12));
+    --interactive-active: var(--dsw-alias-interactive-bg-active, rgba(128, 128, 128, 0.2));
+    --label-primary: var(--dsw-alias-label-primary, inherit);
+    --label-secondary: var(--dsw-alias-label-secondary, rgba(128, 128, 128, 0.78));
+    --label-tertiary: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.58));
+    --error: var(--dsw-alias-state-error-primary, #e05252);
+    --success: var(--dsw-alias-state-success-primary, #4caf50);
+  
+    /* Board: warm amber wood family (fixed, physical object). */
+    --wood-base: oklch(0.74 0.1 78);
+    --grid-ink: oklch(0.32 0.04 55 / 0.6);
+    --hoshi-ink: oklch(0.3 0.04 50 / 0.72);
+    --stone-black-rim: oklch(0.45 0.02 65);
+    --stone-black-core: oklch(0.16 0.01 60);
+    --stone-white-rim: oklch(0.99 0.005 90);
+    --stone-white-core: oklch(0.86 0.015 80);
+  
+    /* Accent family: amber for state/selection, cinnabar for the last move. */
+    --accent: oklch(0.72 0.12 72);
+    --accent-soft: oklch(0.72 0.12 72 / 0.22);
+    --cinnabar: oklch(0.55 0.17 30);
+  
+    /* Serif voice for the status line and headings. */
+    --serif: "Songti SC", "STSong", "Noto Serif CJK SC", Georgia, "Times New Roman", serif;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  cursor: pointer;
-  list-style: none;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 2px 28px;
+  max-width: 980px;
+  box-sizing: border-box;
+}
+
+.settingsTitle {
+  margin: 0;
   font-family: var(--serif);
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 600;
-  user-select: none;
+  color: var(--label-primary);
 }
 
-.panelTitle::-webkit-details-marker {
-  display: none;
+.settingsIntro {
+  margin: -8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--label-secondary);
 }
 
-.panelTitle:hover {
-  background: var(--interactive-hover);
+.settingsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  align-items: start;
 }
 
-.panelTitle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-.panelName {
-  flex: none;
-}
-
-/* The selected model id, right-aligned in the collapsed summary. */
-.summaryMeta {
-  margin-left: auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--label-tertiary);
-}
-
-.panelChevron {
-  flex: none;
-  font-size: 10px;
-  color: var(--label-tertiary);
-  transition: transform 150ms ease;
-}
-
-.sidePanel[open] .panelChevron {
-  transform: rotate(90deg);
-}
-
-.panelBody {
+.settingsCard {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 0 12px 12px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--panel-bg);
+}
+
+.settingsCardTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settingsBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--panel-bg);
+}
+
+.settingsHeading {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settingsNote {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--label-tertiary);
+}
+
+.settingsFooter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settingsHint {
+  font-size: 11px;
+  color: var(--label-tertiary);
+  text-align: center;
 }
 
 /* Miniature stone dots beside the panel titles. */
@@ -693,7 +740,7 @@
   .chevron,
   .select,
   .promptTextarea,
-  .panelChevron {
+  .preview {
     transition: none;
   }
 }

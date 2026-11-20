@@ -80,6 +80,8 @@ export interface SettingsState {
 export declare const DEFAULT_MOVE_TIMEOUT_MS = 3000000;
 /** The fixed per-move output-token cap (not user-adjustable). */
 export declare const DEFAULT_MAX_MOVE_OUTPUT_TOKENS = 32000;
+/** localStorage key of the persisted user settings (never the Jev key). */
+export declare const SETTINGS_STORAGE_KEY = "dsh-gomoku:settings:v1";
 /** The whole store snapshot the view subscribes to. */
 export interface Snapshot {
     game: GameState;
@@ -111,6 +113,11 @@ export declare function placeStone(row: number, col: number): void;
 export declare function togglePause(): void;
 /** Apply one settings patch (model selection, thinking, overrides, prompt). */
 export declare function patchSettings(patch: Partial<SettingsState>): void;
+/**
+ * Restore every user setting to its default (model/thinking/prompt/mode/Jev
+ * key) without touching the board or the loaded model catalog.
+ */
+export declare function resetSettings(): void;
 /**
  * Retry the current move: re-run the AI move for the side whose last attempt
  * failed (the board is unchanged and it is that side's turn). A no-op while
