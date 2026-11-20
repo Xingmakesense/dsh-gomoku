@@ -34,12 +34,15 @@ The board page is registered on Better Sidebar's tab service, so install [`dsh-b
 dsh plugin --profile demo add dsh-better-sidebar
 ```
 
-### Method 1: npm (recommended)
+### Method 1: npm (only after the maintainer publishes this version)
 
 ```sh
 # Install from npm (initializes the profile on first use)
 dsh plugin --profile demo add @yejiming/dsh-gomoku
 ```
+
+If version 0.0.0 is not on npm yet, use the GitHub source install below: this repository commits the full source and the prebuilt artifacts, so no build runs at install time.
+
 
 ### Method 2: GitHub source
 

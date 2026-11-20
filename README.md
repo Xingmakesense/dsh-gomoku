@@ -34,12 +34,15 @@
 dsh plugin --profile demo add dsh-better-sidebar
 ```
 
-### 方式一：npm 安装（推荐）
+### 方式一：npm 安装（需维护者已发布该版本）
 
 ```sh
 # 从 npm 安装（首次使用会初始化该 profile）
 dsh plugin --profile demo add @yejiming/dsh-gomoku
 ```
+
+若 npm 上尚未发布 0.0.0 版本，请改用下面的 GitHub 源码安装：本仓库已提交完整源码与构建产物，安装时无需构建。
+
 
 ### 方式二：GitHub 源码安装
 
