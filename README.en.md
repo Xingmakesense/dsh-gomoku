@@ -2,7 +2,10 @@
 
 # Gomoku · Play a Game Against AI Inside DSH
 
-<p align="center"><img src="assets/screenshot.png" width="400" alt="Board page" /> <img src="assets/settings.png" width="760" alt="Settings page" /></p>
+<p align="center">
+  <img src="assets/screenshot.png" width="380" alt="Board page" /><br />
+  <img src="assets/settings.png" width="880" alt="Settings page" />
+</p>
 
 Tired of making the AI write code and build spreadsheets for you? This time it sits down across the board from you. `@yejiming/dsh-gomoku` is a gomoku plugin for DeepSeek Harness: it registers a Gomoku page through Better Sidebar's tab registry (`dsh-better-sidebar`), putting a 15×15 board in the right sidebar so you can play against DeepSeek — or any model you configure.
 

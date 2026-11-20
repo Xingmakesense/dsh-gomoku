@@ -2,7 +2,10 @@
 
 # 五子棋（Gomoku）· 在 DSH 里和 AI 杀一盘
 
-<p align="center"><img src="assets/screenshot.png" width="400" alt="棋盘页" /> <img src="assets/settings.png" width="760" alt="设置页" /></p>
+<p align="center">
+  <img src="assets/screenshot.png" width="380" alt="棋盘页" /><br />
+  <img src="assets/settings.png" width="880" alt="设置页" />
+</p>
 
 总是让 AI 帮你写代码、做表格？这次换它陪你下棋。`@yejiming/dsh-gomoku` 是 DeepSeek Harness 的五子棋插件：通过 Better Sidebar（`dsh-better-sidebar`）的标签注册服务，把「五子棋」作为一个独立页面放进右侧边栏，摆上一盘 15×15 的棋盘，让 DeepSeek 或任何你配置好的模型执子对弈。
 
