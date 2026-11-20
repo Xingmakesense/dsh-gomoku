@@ -3,6 +3,7 @@ import {
   BLACK, BOARD_SIZE, DEFAULT_SYSTEM_PROMPT, EMPTY, GOMOKU_PATH, WHITE,
   boardText, buildMoveUserMessage, isLegalMove, isRetryableMoveFailure, parseMoveReply, validateMoveRequest,
 } from '../src/index.ts'
+import { MAX_CANDIDATES, MAX_MOVE_OUTPUT_TOKENS, MOVE_TIMEOUT_MS, MOVE_TIMEOUT_SECONDS } from '../src/limits.ts'
 
 const emptyBoard = (): number[] => new Array<number>(BOARD_SIZE * BOARD_SIZE).fill(EMPTY)
 
@@ -121,18 +122,21 @@ describe('validateMoveRequest', () => {
     expect(() => validateMoveRequest({ provider: 'p', model: 'm', side: 'grey', board: emptyBoard() })).toThrow(/side/)
   })
 
-  it('accepts an optional thinking level', () => {
+  it('accepts any model-native effort id', () => {
     const board = emptyBoard()
-    expect(validateMoveRequest({ provider: 'p', model: 'm', side: 'black', board, thinking: 'max' }))
-      .toMatchObject({ thinking: 'max' })
+    // The host owns the vocabulary; validation only checks the shape.
+    expect(validateMoveRequest({ provider: 'p', model: 'm', side: 'black', board, thinking: 'ultra' }))
+      .toMatchObject({ thinking: 'ultra' })
     expect(validateMoveRequest({ provider: 'p', model: 'm', side: 'black', board }))
       .not.toHaveProperty('thinking')
   })
 
-  it('rejects invalid thinking levels', () => {
-    expect(() => validateMoveRequest({ provider: 'p', model: 'm', side: 'black', board: emptyBoard(), thinking: 'ultra' }))
+  it('rejects malformed effort ids', () => {
+    expect(() => validateMoveRequest({ provider: 'p', model: 'm', side: 'black', board: emptyBoard(), thinking: '' }))
       .toThrow(/thinking/)
     expect(() => validateMoveRequest({ provider: 'p', model: 'm', side: 'black', board: emptyBoard(), thinking: 3 }))
+      .toThrow(/thinking/)
+    expect(() => validateMoveRequest({ provider: 'p', model: 'm', side: 'black', board: emptyBoard(), thinking: 'x'.repeat(65) }))
       .toThrow(/thinking/)
   })
 
@@ -207,8 +211,12 @@ describe('default system prompt', () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain('{"draw": true}')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('{"error"')
     expect(DEFAULT_SYSTEM_PROMPT).toContain('只输出一行 JSON')
-    // The hard per-move budget is part of the contract the model is told about.
-    expect(DEFAULT_SYSTEM_PROMPT).toContain('20 秒')
+    // The hard per-move budget is part of the contract the model is told
+    // about, and it is derived from src/limits.ts rather than restated here.
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(`${MOVE_TIMEOUT_SECONDS} 秒`)
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(`最多评估 ${MAX_CANDIDATES} 个点`)
+    expect(MOVE_TIMEOUT_MS).toBe(20_000)
+    expect(MAX_MOVE_OUTPUT_TOKENS).toBe(2_048)
     // Compactness is a feature: the board text and the model's own thinking
     // dominate a move request, so the prompt must stay well under the old
     // example-laden text (~5300 chars).

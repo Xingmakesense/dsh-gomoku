@@ -44,8 +44,12 @@ export declare const BLACK = 1;
 export declare const WHITE = 2;
 /** The side an AI move request plays for. */
 export type GomokuSide = 'black' | 'white';
-/** The AI thinking level for one move request (wire spelling). */
-export type GomokuThinking = 'off' | 'high' | 'max';
+/**
+ * The reasoning effort for one move request: any id the selected model
+ * advertises in its native reasoning metadata (the host resolves it). Omitted
+ * when the move follows the model's own default effort.
+ */
+export type GomokuThinking = string;
 /** Required plugin configuration. */
 export interface Config {
     /** End-to-end deadline for one AI move request (all attempts), in milliseconds. */
@@ -116,8 +120,8 @@ export interface MoveRequestBody {
     /** Custom system prompt; empty or absent falls back to the default. */
     system?: string;
     /**
-     * AI thinking level; forwarded only when the selected model advertises
-     * that effort, otherwise the model's own default applies.
+     * Model-native reasoning effort id; forwarded only when the selected model
+     * advertises that effort, otherwise the model's own default applies.
      */
     thinking?: GomokuThinking;
     /** Per-request deadline override (milliseconds); absent uses the config default. */

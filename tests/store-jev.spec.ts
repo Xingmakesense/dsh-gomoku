@@ -36,7 +36,7 @@ describe('Jev page-memory settings', () => {
     const body = JSON.parse(fetch.mock.calls[0][1].body)
     expect(body.provider).toBe('other')
     expect(body).not.toHaveProperty('jevApiKey')
-    expect(body.thinking).toBe('off')
+    expect(body).not.toHaveProperty('thinking')
   })
 
   it('starts without a key after the page module is reloaded', async () => {

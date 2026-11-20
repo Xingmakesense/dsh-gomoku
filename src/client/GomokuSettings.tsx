@@ -11,7 +11,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { GomokuT } from './i18n.ts'
-import { type GomokuKey } from './locales.ts'
 import { type Thinking } from './game.ts'
 import {
   getSnapshot, loadModels, patchSettings, resetSettings, subscribe,
@@ -31,11 +30,11 @@ function formatTokens(count: number): string {
   return count >= 1000 ? (count / 1000).toFixed(1) + 'k' : String(count)
 }
 
-const THINKINGS: readonly { value: Thinking; key: GomokuKey }[] = [
-  { value: 'off', key: 'thinking.off' },
-  { value: 'high', key: 'thinking.high' },
-  { value: 'max', key: 'thinking.max' },
-]
+/** One native effort the host reports for a model. */
+interface NativeEffort {
+  id: string
+  name: string
+}
 
 /**
  * One per-side model selector. The dropdown is themed by the plugin itself
@@ -170,6 +169,80 @@ function PromptEditor({
   )
 }
 
+/**
+ * One side's reasoning-effort selector. The options come from the host's
+ * native model metadata (GET /plugins/gomoku/efforts) — the plugin keeps no
+ * effort vocabulary of its own — plus an explicit "follow the model's default"
+ * choice, which sends no effort at all.
+ */
+function EffortSelect({
+  provider, model, value, onChange, t, scheme,
+}: {
+  provider: string | undefined
+  model: string | undefined
+  value: Thinking | undefined
+  onChange: (effort: Thinking | undefined) => void
+  t: GomokuT
+  scheme: ColorScheme
+}) {
+  const [efforts, setEfforts] = useState<NativeEffort[]>([])
+  const [defaultEffort, setDefaultEffort] = useState<string | undefined>(undefined)
+  const [loading, setLoading] = useState(false)
+
+  // Resolve the selected model's native efforts; a model switch supersedes
+  // the previous lookup, and a failure simply leaves the default option.
+  useEffect(() => {
+    if (provider === undefined || model === undefined) {
+      setEfforts([])
+      setDefaultEffort(undefined)
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    fetch('/plugins/gomoku/efforts?provider=' + encodeURIComponent(provider) + '&model=' + encodeURIComponent(model))
+      .then(response => response.json() as Promise<{ efforts?: NativeEffort[]; default?: string }>)
+      .then((body) => {
+        if (cancelled) return
+        setEfforts(body.efforts ?? [])
+        setDefaultEffort(body.default)
+      })
+      .catch(() => { if (!cancelled) { setEfforts([]); setDefaultEffort(undefined) } })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [provider, model])
+
+  // Say which native effort "default" currently resolves to, so the page shows
+  // the host's configuration instead of an opaque word.
+  const defaultName = defaultEffort !== undefined
+    ? (efforts.find(effort => effort.id === defaultEffort)?.name ?? defaultEffort)
+    : undefined
+  const defaultLabel = defaultName !== undefined
+    ? t('thinking.default') + ' · ' + defaultName
+    : t('thinking.default')
+  // A persisted id this model no longer declares stays visible (and is dropped
+  // server-side) instead of silently looking like "default".
+  const stored = value !== undefined && !efforts.some(effort => effort.id === value)
+    ? [{ value, label: value }]
+    : []
+  const options = [
+    { value: '', label: defaultLabel },
+    ...efforts.map(effort => ({ value: effort.id, label: effort.name })),
+    ...stored,
+  ]
+  return (
+    <Dropdown
+      label={t('panel.thinking')}
+      value={value ?? ''}
+      groups={[{ label: t('thinking.native'), options }]}
+      placeholder={defaultLabel}
+      emptyText={loading ? t('thinking.loading') : t('thinking.none')}
+      disabled={provider === undefined || model === undefined}
+      scheme={scheme}
+      onChange={(next) => onChange(next === '' ? undefined : next)}
+    />
+  )
+}
+
 /** One side's configuration card: model, thinking level, prompt and log. */
 function SideSettings({
   heading, stone, settings, logs, expanded, t, onToggle, scheme,
@@ -203,23 +276,16 @@ function SideSettings({
       />
       {model.provider === JEV_PROVIDER
         ? <p className={css.settingsNote}>{t('jev.decision.hint')}</p>
-        : <div className={css.toolbar}>
-          <span className={css.label}>{t('panel.thinking')}</span>
-          <div className={css.segmented} role="group" aria-label={t('panel.thinking')}>
-            {THINKINGS.map(level => (
-              <button
-                key={level.value}
-                type="button"
-                className={css.segButton + (thinking === level.value ? ' ' + css.segActive : '')}
-                onClick={() => patchSettings(isBlack
-                  ? { blackThinking: level.value }
-                  : { whiteThinking: level.value })}
-              >
-                {t(level.key)}
-              </button>
-            ))}
-          </div>
-        </div>}
+        : <EffortSelect
+          provider={model.provider}
+          model={model.model}
+          value={thinking}
+          onChange={(next) => patchSettings(isBlack
+            ? { blackThinking: next }
+            : { whiteThinking: next })}
+          t={t}
+          scheme={scheme}
+        />}
       <PromptEditor
         label={isBlack ? t('panel.prompt.black') : t('panel.prompt.white')}
         value={prompt}

@@ -53,7 +53,7 @@ describe('settings persistence', () => {
 
     store.resetSettings()
     const settings = store.getSnapshot().settings
-    expect(settings.blackThinking).toBe('off')
+    expect(settings.blackThinking).toBeUndefined()
     expect(settings.blackPrompt).toBeUndefined()
     expect(settings.jevApiKey).toBe('')
     expect(settings.mode).toBe('black')

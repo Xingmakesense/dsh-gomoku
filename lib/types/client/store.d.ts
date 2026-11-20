@@ -73,10 +73,10 @@ export interface SettingsState {
     blackModel: SideModel;
     /** The model used when the AI plays white (black-side human games, both-mode). */
     whiteModel: SideModel;
-    /** The AI thinking level when the AI plays black. */
-    blackThinking: Thinking;
-    /** The AI thinking level when the AI plays white. */
-    whiteThinking: Thinking;
+    /** Native reasoning effort when the AI plays black; undefined follows the model default. */
+    blackThinking: Thinking | undefined;
+    /** Native reasoning effort when the AI plays white; undefined follows the model default. */
+    whiteThinking: Thinking | undefined;
     /** Fixed per-move deadline; not user-adjustable (see DEFAULT_MOVE_TIMEOUT_MS). */
     moveTimeoutMs: number;
     /** Fixed per-move output-token cap; not user-adjustable (see DEFAULT_MAX_MOVE_OUTPUT_TOKENS). */
@@ -88,9 +88,9 @@ export interface SettingsState {
     groups: ModelGroup[];
     modelsError: string | undefined;
 }
-/** The fixed per-move deadline in milliseconds (20 seconds; not user-adjustable). */
+/** The fixed per-move deadline in milliseconds (not user-adjustable); derived from src/limits.ts. */
 export declare const DEFAULT_MOVE_TIMEOUT_MS = 20000;
-/** The fixed per-move output-token cap (not user-adjustable). */
+/** The fixed per-move output-token cap (not user-adjustable); derived from src/limits.ts. */
 export declare const DEFAULT_MAX_MOVE_OUTPUT_TOKENS = 2048;
 /** localStorage key of the persisted user settings (never the Jev key). */
 export declare const SETTINGS_STORAGE_KEY = "dsh-gomoku:settings:v1";

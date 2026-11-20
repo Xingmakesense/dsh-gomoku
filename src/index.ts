@@ -32,6 +32,9 @@ import type { IncomingMessage } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { BlockAssembler, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import {
+  MAX_CANDIDATES, MAX_MOVE_ATTEMPTS, MAX_MOVE_OUTPUT_TOKENS, MOVE_TIMEOUT_MS, MOVE_TIMEOUT_SECONDS,
+} from './limits.ts'
 import type {
   ContentBlock, FinishReason, GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, RequestUserInput, TokenUsage,
 } from '@deepseek-ai/dsh-llm'
@@ -61,8 +64,12 @@ export const WHITE = 2
 /** The side an AI move request plays for. */
 export type GomokuSide = 'black' | 'white'
 
-/** The AI thinking level for one move request (wire spelling). */
-export type GomokuThinking = 'off' | 'high' | 'max'
+/**
+ * The reasoning effort for one move request: any id the selected model
+ * advertises in its native reasoning metadata (the host resolves it). Omitted
+ * when the move follows the model's own default effort.
+ */
+export type GomokuThinking = string
 
 /** Required plugin configuration. */
 export interface Config {
@@ -79,12 +86,12 @@ export const Config: z<Config> = z.object({
   // Fixed at the product level: the browser half always sends these values
   // per request, and the node half clamps requests to this policy, so a caller
   // can only tighten the deadline, never widen it.
-  moveTimeoutMs: z.number().step(1).min(1000).default(20_000),
+  moveTimeoutMs: z.number().step(1).min(1000).default(MOVE_TIMEOUT_MS),
   // Small by default: the model has twenty seconds per move, and the output
   // budget is exactly what it spends thinking. A reply cut short is still
   // parsed when the JSON itself survives the cut.
-  maxMoveOutputTokens: z.number().step(1).min(8).default(2_048),
-  maxMoveAttempts: z.number().step(1).min(1).max(3).default(3),
+  maxMoveOutputTokens: z.number().step(1).min(8).default(MAX_MOVE_OUTPUT_TOKENS),
+  maxMoveAttempts: z.number().step(1).min(1).max(3).default(MAX_MOVE_ATTEMPTS),
 })
 
 /** Route prefix owned by this plugin (the browser half calls under it). */
@@ -112,7 +119,7 @@ export const DEFAULT_SYSTEM_PROMPT = [
   '6. 布局：靠近天元与双方已有棋群，保持连线；避免边角、孤立与没有后续的落点。',
   '',
   '# 时间预算（硬性）',
-  '每一步只有 20 秒，思考与输出都算在内，超时这一手立即作废。不要展开长链推演：按上面的优先级自上而下扫描，命中第一条能执行的规则就落子；候选点最多比较 3 个，拿不准就选最靠近现有棋群、最能延续连线的点。',
+  `每一步只有 ${MOVE_TIMEOUT_SECONDS} 秒，思考与输出都算在内，超时这一手立即作废。不要展开长链推演：按上面的优先级自上而下扫描，命中第一条能执行的规则就落子；候选点最多比较 ${MAX_CANDIDATES} 个，拿不准就选最靠近现有棋群、最能延续连线的点。`,
   '',
   '# 术语',
   '活三＝3 连且两端可延伸（下一步可成活四）；冲四＝4 连且仅一端可成五；活四＝两端均可成五、无法单点封堵；双活三/四三＝一子同时形成两个活三 / 冲四加活三，均为强杀。',
@@ -120,7 +127,7 @@ export const DEFAULT_SYSTEM_PROMPT = [
   '# 威胁提示',
   '每次请求附带程序计算的威胁清单：对方可直接成五 / 活三（落子即形成活四）与冲四的点，以及己方机会。它只作参考，不强制落子；出现对方成五点或活三时必须优先处理，再考虑进攻。',
   '',
-  '# 候选比较（最多评估 3 个点）',
+  `# 候选比较（最多评估 ${MAX_CANDIDATES} 个点）`,
   '- 只考虑现有棋子 2 格以内的空点；黑方首手固定天元 (7,7)。',
   '- 评分＝进攻价值（成 5 > 活四 > 冲四 > 活三 > 双三/四三 > 活二）＋防守价值（封成 5 > 封冲四 > 封活三/双防）。',
   '- 同分依次比较：能否强制对手应手 → 是否连接更多棋子 → 是否更靠近中心。',
@@ -171,8 +178,8 @@ export interface MoveRequestBody {
   /** Custom system prompt; empty or absent falls back to the default. */
   system?: string
   /**
-   * AI thinking level; forwarded only when the selected model advertises
-   * that effort, otherwise the model's own default applies.
+   * Model-native reasoning effort id; forwarded only when the selected model
+   * advertises that effort, otherwise the model's own default applies.
    */
   thinking?: GomokuThinking
   /** Per-request deadline override (milliseconds); absent uses the config default. */
@@ -492,9 +499,10 @@ export function validateMoveRequest(value: unknown): MoveRequestBody {
   if (candidate.side !== 'black' && candidate.side !== 'white') {
     throw new Error('side 必须是 "black" 或 "white"')
   }
-  if (candidate.thinking !== undefined && candidate.thinking !== 'off'
-    && candidate.thinking !== 'high' && candidate.thinking !== 'max') {
-    throw new Error('thinking 必须是 "off"、"high" 或 "max"')
+  if (candidate.thinking !== undefined
+    && (typeof candidate.thinking !== 'string'
+      || candidate.thinking.length === 0 || candidate.thinking.length > 64)) {
+    throw new Error('thinking 必须是模型原生思考强度 id（非空字符串）')
   }
   if (candidate.moveTimeoutMs !== undefined
     && (typeof candidate.moveTimeoutMs !== 'number'
@@ -614,6 +622,36 @@ export function apply(ctx: Context, config: Config): void {
           const segments = url.pathname.slice(GOMOKU_PATH.length).split('/').filter(Boolean)
           if (req.method === 'GET' && segments.length === 1 && segments[0] === 'prompt') {
             writeJson(200, { prompt: DEFAULT_SYSTEM_PROMPT })
+            return
+          }
+          if (req.method === 'GET' && segments.length === 1 && segments[0] === 'efforts') {
+            // The model's own reasoning metadata: the settings page lists the
+            // efforts the host says this exact model supports instead of a
+            // hard-coded vocabulary. An unreachable catalog answers with an
+            // empty list rather than failing the page.
+            const provider = url.searchParams.get('provider') ?? ''
+            const model = url.searchParams.get('model') ?? ''
+            if (provider.length === 0 || model.length === 0) {
+              writeJson(400, { error: 'provider 与 model 必填' })
+              return
+            }
+            if (provider === JEV_PROVIDER) {
+              writeJson(200, { efforts: [] })
+              return
+            }
+            try {
+              const info = await cachedModelInfo(ctx, provider, model, new AbortController().signal)
+              const reasoning = info.reasoning
+              writeJson(200, {
+                efforts: (reasoning?.efforts ?? []).map(effort => ({ id: effort.id, name: effort.name })),
+                ...(reasoning?.defaultEffort !== undefined ? { default: reasoning.defaultEffort } : {}),
+              })
+            } catch (error) {
+              writeJson(200, {
+                efforts: [],
+                error: error instanceof Error ? error.message : String(error),
+              })
+            }
             return
           }
           if (req.method === 'GET' && segments.length === 1 && segments[0] === 'log') {

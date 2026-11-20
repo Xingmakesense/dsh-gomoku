@@ -30,9 +30,10 @@ export declare const zh: {
     'panel.black': string;
     'panel.white': string;
     'panel.thinking': string;
-    'thinking.off': string;
-    'thinking.high': string;
-    'thinking.max': string;
+    'thinking.default': string;
+    'thinking.native': string;
+    'thinking.loading': string;
+    'thinking.none': string;
     'panel.model.black': string;
     'panel.model.white': string;
     'model.current': string;
@@ -104,9 +105,10 @@ export declare const en: {
     'panel.black': string;
     'panel.white': string;
     'panel.thinking': string;
-    'thinking.off': string;
-    'thinking.high': string;
-    'thinking.max': string;
+    'thinking.default': string;
+    'thinking.native': string;
+    'thinking.loading': string;
+    'thinking.none': string;
     'panel.model.black': string;
     'panel.model.white': string;
     'model.current': string;

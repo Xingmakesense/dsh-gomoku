@@ -6,6 +6,7 @@
  * the background, exactly the plugin's "关闭侧边栏不中断对局" contract. The
  * view subscribes via useSyncExternalStore.
  */
+import { MAX_MOVE_OUTPUT_TOKENS, MOVE_TIMEOUT_MS } from '../limits.ts'
 import { JEV_PROVIDER, isValidJevApiKey } from '../jev-shared.ts'
 import {
   BLACK, BOARD_SIZE, CELL_COUNT, EMPTY, TENGEN, WHITE,
@@ -85,10 +86,10 @@ export interface SettingsState {
   blackModel: SideModel
   /** The model used when the AI plays white (black-side human games, both-mode). */
   whiteModel: SideModel
-  /** The AI thinking level when the AI plays black. */
-  blackThinking: Thinking
-  /** The AI thinking level when the AI plays white. */
-  whiteThinking: Thinking
+  /** Native reasoning effort when the AI plays black; undefined follows the model default. */
+  blackThinking: Thinking | undefined
+  /** Native reasoning effort when the AI plays white; undefined follows the model default. */
+  whiteThinking: Thinking | undefined
   /** Fixed per-move deadline; not user-adjustable (see DEFAULT_MOVE_TIMEOUT_MS). */
   moveTimeoutMs: number
   /** Fixed per-move output-token cap; not user-adjustable (see DEFAULT_MAX_MOVE_OUTPUT_TOKENS). */
@@ -101,10 +102,10 @@ export interface SettingsState {
   modelsError: string | undefined
 }
 
-/** The fixed per-move deadline in milliseconds (20 seconds; not user-adjustable). */
-export const DEFAULT_MOVE_TIMEOUT_MS = 20_000
-/** The fixed per-move output-token cap (not user-adjustable). */
-export const DEFAULT_MAX_MOVE_OUTPUT_TOKENS = 2_048
+/** The fixed per-move deadline in milliseconds (not user-adjustable); derived from src/limits.ts. */
+export const DEFAULT_MOVE_TIMEOUT_MS = MOVE_TIMEOUT_MS
+/** The fixed per-move output-token cap (not user-adjustable); derived from src/limits.ts. */
+export const DEFAULT_MAX_MOVE_OUTPUT_TOKENS = MAX_MOVE_OUTPUT_TOKENS
 
 /** localStorage key of the persisted user settings (never the Jev key). */
 export const SETTINGS_STORAGE_KEY = 'dsh-gomoku:settings:v1'
@@ -128,9 +129,9 @@ function isSideModel(value: unknown): value is SideModel {
     && (model.model === undefined || typeof model.model === 'string')
 }
 
-/** Whether a persisted value is a known thinking level. */
+/** Whether a persisted value is a usable native effort id. */
 function isThinking(value: unknown): value is Thinking {
-  return value === 'off' || value === 'high' || value === 'max'
+  return typeof value === 'string' && value.length > 0 && value.length <= 64
 }
 
 /** Whether a persisted value is a known play mode. */
@@ -213,8 +214,8 @@ function defaultSettings(): SettingsState {
     jevApiKey: '',
     blackModel: { provider: undefined, model: undefined },
     whiteModel: { provider: undefined, model: undefined },
-    blackThinking: 'off',
-    whiteThinking: 'off',
+    blackThinking: undefined,
+    whiteThinking: undefined,
     moveTimeoutMs: DEFAULT_MOVE_TIMEOUT_MS,
     maxMoveOutputTokens: DEFAULT_MAX_MOVE_OUTPUT_TOKENS,
     blackPrompt: undefined,
@@ -232,8 +233,8 @@ function freshSettings(): SettingsState {
     mode: saved.mode ?? 'black',
     blackModel: saved.blackModel ?? { provider: undefined, model: undefined },
     whiteModel: saved.whiteModel ?? { provider: undefined, model: undefined },
-    blackThinking: saved.blackThinking ?? 'off',
-    whiteThinking: saved.whiteThinking ?? 'off',
+    blackThinking: saved.blackThinking,
+    whiteThinking: saved.whiteThinking,
     blackPrompt: saved.blackPrompt,
     whitePrompt: saved.whitePrompt,
   }
@@ -507,8 +508,8 @@ function sideModelOf(settings: SettingsState, turn: Cell): SideModel {
   return turn === BLACK ? settings.blackModel : settings.whiteModel
 }
 
-/** The side thinking level for one turn color. */
-function sideThinkingOf(settings: SettingsState, turn: Cell): Thinking {
+/** The side's native reasoning effort for one turn color (undefined = model default). */
+function sideThinkingOf(settings: SettingsState, turn: Cell): Thinking | undefined {
   return turn === BLACK ? settings.blackThinking : settings.whiteThinking
 }
 
@@ -575,6 +576,7 @@ function scheduleAi(attempt: number = 1): void {
     if (gen === generation && seq === requestSeq) controller.abort()
   }, settings.moveTimeoutMs + WATCHDOG_MARGIN_MS)
   const system = sidePromptOf(settings, turn)
+  const thinking = sideThinkingOf(settings, turn)
   requestAiMove({
     provider: model.provider,
     model: model.model,
@@ -582,7 +584,7 @@ function scheduleAi(attempt: number = 1): void {
     board: [...game.board],
     ...(model.provider === JEV_PROVIDER
       ? { jevApiKey: settings.jevApiKey }
-      : { thinking: sideThinkingOf(settings, turn) }),
+      : (thinking !== undefined ? { thinking } : {})),
     moveTimeoutMs: settings.moveTimeoutMs,
     maxMoveOutputTokens: settings.maxMoveOutputTokens,
     ...(system !== undefined ? { system } : {}),

@@ -87,6 +87,15 @@ describe('DSH host integration', () => {
     })
   })
 
+  it('serves the model native reasoning efforts instead of a fixed vocabulary', async () => {
+    const body = await (await fetch(`${base}/efforts?provider=test&model=test-model`)).json()
+    expect(body).toEqual({ efforts: [{ id: 'high', name: 'High' }], default: 'high' })
+    // Jev chooses from candidates and has no thinking levels at all.
+    expect(await (await fetch(`${base}/efforts?provider=gomoku-jev&model=jev-latest`)).json())
+      .toEqual({ efforts: [] })
+    expect((await fetch(`${base}/efforts?provider=test`)).status).toBe(400)
+  })
+
   it('streams an identity-free move request with reasoning and schema defaults', async () => {
     const response = await post(base, request({ thinking: 'high' }))
     expect(response.status).toBe(200)

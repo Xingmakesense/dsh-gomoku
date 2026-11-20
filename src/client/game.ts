@@ -24,8 +24,12 @@ export type GomokuSide = 'black' | 'white'
 /** The side the human plays; 'both' means AI vs AI. */
 export type GameMode = 'black' | 'white' | 'both'
 
-/** The AI thinking level for one move request (wire spelling). */
-export type Thinking = 'off' | 'high' | 'max'
+/**
+ * A model-native reasoning effort id (the host reports the ids each model
+ * advertises, e.g. "off" / "high" / "max"); undefined means "follow the
+ * model's own default".
+ */
+export type Thinking = string
 
 /** A 15×15 board in row-major order. */
 export type Board = readonly Cell[]
