@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { analyzeThreats, threatHintText } from '../src/threats.ts'
+import { analyzeThreats, candidateOptions, threatHintText } from '../src/threats.ts'
 import { buildMoveUserMessage } from '../src/index.ts'
 
 const BLACK = 1
@@ -18,6 +18,50 @@ function pointsOf(report: ReturnType<typeof analyzeThreats>, key: 'row' | 'colum
   const entry = report.opponent.openThrees.find(item => item.direction === key)
   return (entry?.points ?? []).map(point => point.row + ',' + point.col)
 }
+
+describe('threat report fidelity', () => {
+  it('does not flood the fours list when a winning point already exists', () => {
+    // White already wins at (7,6); only points that really create a four may
+    // be reported, not every intersection sharing the line.
+    const report = analyzeThreats(boardOf([
+      [7, 4, WHITE], [7, 5, WHITE], [7, 7, WHITE], [7, 8, WHITE],
+    ]), 'black')
+    expect(report.opponent.five.map(point => point.row + ',' + point.col)).toEqual(['7,6'])
+    expect(report.opponent.fours.map(point => point.row + ',' + point.col).sort())
+      .toEqual(['7,3', '7,9'])
+  })
+
+  it('records the gapped three ●_●_● as a four threat', () => {
+    const report = analyzeThreats(boardOf([
+      [7, 5, WHITE], [7, 7, WHITE], [7, 9, WHITE],
+    ]), 'black')
+    expect(report.opponent.fours.map(point => point.row + ',' + point.col).sort())
+      .toEqual(['7,6', '7,8'])
+  })
+
+  it('keeps the gapped three open-four point', () => {
+    const report = analyzeThreats(boardOf([
+      [7, 5, WHITE], [7, 6, WHITE], [7, 8, WHITE],
+    ]), 'black')
+    expect(report.opponent.openThrees.flatMap(entry => entry.points)
+      .map(point => point.row + ',' + point.col)).toContain('7,7')
+  })
+})
+
+describe('candidateOptions', () => {
+  it('ranks a forced five block first', () => {
+    const board = boardOf([[7, 4, WHITE], [7, 5, WHITE], [7, 7, WHITE], [7, 8, WHITE]])
+    const options = candidateOptions(analyzeThreats(board, 'black'), 'black')
+    expect(options[0]).toMatchObject({ row: 7, col: 6, reason: '封堵白成五' })
+  })
+
+  it('caps the list and never repeats an intersection', () => {
+    const board = boardOf([[7, 5, WHITE], [7, 6, WHITE], [7, 8, WHITE]])
+    const options = candidateOptions(analyzeThreats(board, 'black'), 'black', 2)
+    expect(options).toHaveLength(2)
+    expect(new Set(options.map(option => option.row * SIZE + option.col)).size).toBe(2)
+  })
+})
 
 describe('analyzeThreats', () => {
   it('reports no tactics on an empty board', () => {

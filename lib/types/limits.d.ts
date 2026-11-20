@@ -15,7 +15,7 @@ export declare const MOVE_TIMEOUT_SECONDS: number;
 /** Output-token cap for one move reply; a reasoning model spends its thinking from this budget. */
 export declare const MAX_MOVE_OUTPUT_TOKENS = 2048;
 /** AI attempts per move request (1 = no retry). Attempts never extend the deadline above. */
-export declare const MAX_MOVE_ATTEMPTS = 3;
+export declare const MAX_MOVE_ATTEMPTS = 5;
 /** Candidate intersections the default prompt lets the model compare before committing. */
 export declare const MAX_CANDIDATES = 3;
 /** Milliseconds reserved at the tail of the deadline for the fast retry. */

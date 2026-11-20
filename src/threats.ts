@@ -96,6 +96,32 @@ function winsInDirection(
   return lineCount(board, row, col, dr, dc, color) >= 5
 }
 
+/**
+ * Whether placing this color at (qr, qc) would complete a five that runs
+ * through the stone at (pr, pc). Only such a point finishes the shape the
+ * placement at (pr, pc) created; a winning point that already existed on the
+ * same line elsewhere must not count, or a single live four would mark most of
+ * the board as "fours".
+ */
+function finishesFiveThrough(
+  board: readonly number[], qr: number, qc: number, pr: number, pc: number,
+  color: number, dr: number, dc: number,
+): boolean {
+  let length = 1
+  let through = qr === pr && qc === pc
+  for (const step of [1, -1] as const) {
+    let r = qr + dr * step
+    let c = qc + dc * step
+    while (inBounds(r, c) && board[r * BOARD_SIZE + c] === color) {
+      length += 1
+      if (r === pr && c === pc) through = true
+      r += dr * step
+      c += dc * step
+    }
+  }
+  return length >= 5 && through
+}
+
 /** Analyze one color's opportunities and threats on the current board. */
 function analyzeSide(board: readonly number[], color: number): SideThreats {
   const five: BoardPoint[] = []
@@ -119,11 +145,19 @@ function analyzeSide(board: readonly number[], color: number): SideThreats {
     let hasFour = false
     for (const { key, dr, dc } of DIRECTIONS) {
       let finishingPoints = 0
-      for (let q = 0; q < next.length; q += 1) {
-        if (next[q] !== EMPTY) continue
-        const qr = Math.floor(q / BOARD_SIZE)
-        const qc = q % BOARD_SIZE
-        if (winsInDirection(next, qr, qc, color, dr, dc)) finishingPoints += 1
+      // Walk the line through this intersection only: a five that does not
+      // include the stone just placed is not a threat this placement creates.
+      for (const step of [1, -1] as const) {
+        let qr = row + dr * step
+        let qc = col + dc * step
+        while (inBounds(qr, qc)) {
+          if (next[qr * BOARD_SIZE + qc] === EMPTY
+            && finishesFiveThrough(next, qr, qc, row, col, color, dr, dc)) {
+            finishingPoints += 1
+          }
+          qr += dr * step
+          qc += dc * step
+        }
       }
       if (finishingPoints >= 2) {
         open[key].push({ row, col })
@@ -155,6 +189,48 @@ export function analyzeThreats(board: readonly number[], side: 'black' | 'white'
     self: analyzeSide(board, selfColor),
     opponent: analyzeSide(board, opponentColor),
   }
+}
+
+/** One suggested intersection, ranked by the threat it answers. */
+export interface MoveOption {
+  row: number
+  col: number
+  /** Why the program suggests it, e.g. "封堵白活三". */
+  reason: string
+}
+
+/**
+ * Rank the best intersections for the side to move: its own win, then the
+ * opponent's winning points, open fours (live-three blocks) and fours, then
+ * its own open-four and four points. Advisory only — the model may still pick
+ * another legal point.
+ * @param report - the threat report for the side to move.
+ * @param side - the side the AI plays.
+ * @param limit - maximum number of options.
+ * @returns the ranked options (empty when the board offers no tactical point).
+ */
+export function candidateOptions(
+  report: ThreatReport, side: 'black' | 'white', limit = 5,
+): MoveOption[] {
+  const opponent = side === 'black' ? '白' : '黑'
+  const options: MoveOption[] = []
+  const seen = new Set<number>()
+  const add = (points: readonly BoardPoint[], reason: string): void => {
+    for (const point of points) {
+      if (options.length >= limit) return
+      const index = point.row * BOARD_SIZE + point.col
+      if (seen.has(index)) continue
+      seen.add(index)
+      options.push({ row: point.row, col: point.col, reason })
+    }
+  }
+  add(report.self.five, '己方成五')
+  add(report.opponent.five, '封堵' + opponent + '成五')
+  for (const entry of report.self.openThrees) add(entry.points, '己方活四')
+  for (const entry of report.opponent.openThrees) add(entry.points, '封堵' + opponent + '活三')
+  add(report.self.fours, '己方冲四')
+  add(report.opponent.fours, '封堵' + opponent + '冲四')
+  return options
 }
 
 /** Render points as (r,c) pairs, capped so the hint stays short. */

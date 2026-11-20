@@ -19,7 +19,7 @@ export const MOVE_TIMEOUT_SECONDS = MOVE_TIMEOUT_MS / 1_000
 export const MAX_MOVE_OUTPUT_TOKENS = 2_048
 
 /** AI attempts per move request (1 = no retry). Attempts never extend the deadline above. */
-export const MAX_MOVE_ATTEMPTS = 3
+export const MAX_MOVE_ATTEMPTS = 5
 
 /** Candidate intersections the default prompt lets the model compare before committing. */
 export const MAX_CANDIDATES = 3

@@ -187,6 +187,27 @@ describe('buildMoveUserMessage', () => {
     expect(text).toContain('轮到你（黑方）落子')
   })
 
+  it('appends the ranked options when the board has threats', () => {
+    const board = emptyBoard()
+    board[7 * BOARD_SIZE + 5] = WHITE
+    board[7 * BOARD_SIZE + 6] = WHITE
+    board[7 * BOARD_SIZE + 8] = WHITE
+    const message = buildMoveUserMessage(
+      { provider: 'p', model: 'm', side: 'black', board }, undefined, undefined,
+    )
+    const text = (message.content[0] as { type: 'text'; text: string }).text
+    expect(text).toContain('# 候选选项')
+    expect(text).toContain('(7,7) —— 封堵白活三')
+  })
+
+  it('omits the option list when the board has no tactical point', () => {
+    const message = buildMoveUserMessage(
+      { provider: 'p', model: 'm', side: 'black', board: emptyBoard() }, undefined, undefined,
+    )
+    const text = (message.content[0] as { type: 'text'; text: string }).text
+    expect(text).not.toContain('# 候选选项')
+  })
+
   it('appends corrective feedback on a retry', () => {
     const request = { provider: 'p', model: 'm', side: 'white' as const, board: emptyBoard() }
     const message = buildMoveUserMessage(request, '{"move": [99, 0]}', '落子坐标越界：[99, 0]')

@@ -43,7 +43,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-llm'
 import { JEV_MODEL, JEV_PROVIDER, isValidJevApiKey } from './jev-shared.ts'
 import { requestJevMove } from './jev.ts'
-import { analyzeThreats, threatHintText } from './threats.ts'
+import { analyzeThreats, candidateOptions, threatHintText } from './threats.ts'
 
 /** Cordis plugin name (diagnostics only). */
 export const name = 'gomoku'
@@ -105,7 +105,7 @@ export const Config: z<Config> = z.object({
   // budget is exactly what it spends thinking. A reply cut short is still
   // parsed when the JSON itself survives the cut.
   maxMoveOutputTokens: z.number().step(1).min(8).default(MAX_MOVE_OUTPUT_TOKENS),
-  maxMoveAttempts: z.number().step(1).min(1).max(3).default(MAX_MOVE_ATTEMPTS),
+  maxMoveAttempts: z.number().step(1).min(1).max(5).default(MAX_MOVE_ATTEMPTS),
 })
 
 /** Route prefix owned by this plugin (the browser half calls under it). */
@@ -563,7 +563,18 @@ export function buildMoveUserMessage(request: MoveRequestBody, previous: string 
   ]
   // Tell the model what the position actually contains; the hint is advice,
   // never a forced move.
-  lines.push('', '# 威胁提示（程序判定，仅作参考，不强制落子）', threatHintText(analyzeThreats(request.board, request.side), request.side))
+  const report = analyzeThreats(request.board, request.side)
+  lines.push('', '# 威胁提示（程序判定，仅作参考，不强制落子）', threatHintText(report, request.side))
+  // Ranked options: the model still decides, but the obvious tactical points
+  // no longer have to be rediscovered on every move.
+  const options = candidateOptions(report, request.side)
+  if (options.length > 0) {
+    lines.push('', '# 候选选项（程序按威胁排序，建议优先选择）')
+    options.forEach((option, index) => {
+      lines.push(`${index + 1}. (${option.row},${option.col}) —— ${option.reason}`)
+    })
+    lines.push('优先从上述选项中选择；如果都不合适，可以另选其他合法空点。')
+  }
   if (previous !== undefined && reason !== undefined) {
     lines.push('', `警告：你上一次的返回不合法（${reason}），完整输出如下：`, previous)
     lines.push('你的上一次落子已被拒绝。请重新观察棋盘，选择另一个未被占用的空交叉点，不要输出任何思考过程或解释，只返回一个合法的 JSON 对象。')

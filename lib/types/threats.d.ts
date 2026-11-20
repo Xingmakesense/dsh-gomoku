@@ -65,6 +65,24 @@ export interface ThreatReport {
  * @returns the opponent's threats and this side's opportunities.
  */
 export declare function analyzeThreats(board: readonly number[], side: 'black' | 'white'): ThreatReport;
+/** One suggested intersection, ranked by the threat it answers. */
+export interface MoveOption {
+    row: number;
+    col: number;
+    /** Why the program suggests it, e.g. "封堵白活三". */
+    reason: string;
+}
+/**
+ * Rank the best intersections for the side to move: its own win, then the
+ * opponent's winning points, open fours (live-three blocks) and fours, then
+ * its own open-four and four points. Advisory only — the model may still pick
+ * another legal point.
+ * @param report - the threat report for the side to move.
+ * @param side - the side the AI plays.
+ * @param limit - maximum number of options.
+ * @returns the ranked options (empty when the board offers no tactical point).
+ */
+export declare function candidateOptions(report: ThreatReport, side: 'black' | 'white', limit?: number): MoveOption[];
 /**
  * Render the advisory block appended to the move request's user message.
  * It states threats and opportunities; it never dictates a move.
