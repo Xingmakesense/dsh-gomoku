@@ -9,7 +9,7 @@
  * follow.
  */
 /** Hard per-move deadline in milliseconds: every attempt and backoff of that move shares it. */
-export declare const MOVE_TIMEOUT_MS = 20000;
+export declare const MOVE_TIMEOUT_MS = 30000;
 /** The same deadline in whole seconds, for text the model reads. */
 export declare const MOVE_TIMEOUT_SECONDS: number;
 /** Output-token cap for one move reply; a reasoning model spends its thinking from this budget. */

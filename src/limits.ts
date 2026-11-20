@@ -10,7 +10,7 @@
  */
 
 /** Hard per-move deadline in milliseconds: every attempt and backoff of that move shares it. */
-export const MOVE_TIMEOUT_MS = 20_000
+export const MOVE_TIMEOUT_MS = 30_000
 
 /** The same deadline in whole seconds, for text the model reads. */
 export const MOVE_TIMEOUT_SECONDS = MOVE_TIMEOUT_MS / 1_000

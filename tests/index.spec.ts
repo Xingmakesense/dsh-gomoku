@@ -215,7 +215,7 @@ describe('default system prompt', () => {
     // about, and it is derived from src/limits.ts rather than restated here.
     expect(DEFAULT_SYSTEM_PROMPT).toContain(`${MOVE_TIMEOUT_SECONDS} 秒`)
     expect(DEFAULT_SYSTEM_PROMPT).toContain(`最多评估 ${MAX_CANDIDATES} 个点`)
-    expect(MOVE_TIMEOUT_MS).toBe(20_000)
+    expect(MOVE_TIMEOUT_MS).toBe(30_000)
     expect(MAX_MOVE_OUTPUT_TOKENS).toBe(2_048)
     // Compactness is a feature: the board text and the model's own thinking
     // dominate a move request, so the prompt must stay well under the old

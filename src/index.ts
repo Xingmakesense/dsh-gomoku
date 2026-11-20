@@ -87,7 +87,7 @@ export const Config: z<Config> = z.object({
   // per request, and the node half clamps requests to this policy, so a caller
   // can only tighten the deadline, never widen it.
   moveTimeoutMs: z.number().step(1).min(1000).default(MOVE_TIMEOUT_MS),
-  // Small by default: the model has twenty seconds per move, and the output
+  // Small by default: the model has thirty seconds per move, and the output
   // budget is exactly what it spends thinking. A reply cut short is still
   // parsed when the JSON itself survives the cut.
   maxMoveOutputTokens: z.number().step(1).min(8).default(MAX_MOVE_OUTPUT_TOKENS),
