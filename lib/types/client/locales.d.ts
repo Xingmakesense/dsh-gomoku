@@ -1,0 +1,125 @@
+/** `gomoku` namespace dictionaries for the board page. */
+/** Dictionary namespace owned by this plugin. */
+export declare const NS = "gomoku";
+/** Module augmentation: this plugin owns the `gomoku` locale namespace. */
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+    interface LocaleNamespaceMap {
+        gomoku: GomokuKey;
+    }
+}
+/** Simplified Chinese dictionary (the key-set source of truth). */
+export declare const zh: {
+    'tab.label': string;
+    'tab.description': string;
+    'jev.key.label': string;
+    'jev.key.placeholder': string;
+    'jev.key.replace': string;
+    'jev.key.hint': string;
+    'jev.key.save': string;
+    'jev.key.clear': string;
+    'jev.key.configured': string;
+    'jev.key.required': string;
+    'jev.key.invalid': string;
+    'jev.decision.hint': string;
+    'panel.mode': string;
+    'mode.black': string;
+    'mode.white': string;
+    'mode.both': string;
+    'panel.black': string;
+    'panel.white': string;
+    'panel.thinking': string;
+    'thinking.off': string;
+    'thinking.high': string;
+    'thinking.max': string;
+    'panel.model.black': string;
+    'panel.model.white': string;
+    'panel.newGame': string;
+    'panel.pause': string;
+    'panel.resume': string;
+    'panel.log.black': string;
+    'panel.log.white': string;
+    'panel.prompt.black': string;
+    'panel.prompt.white': string;
+    'panel.prompt.save': string;
+    'panel.prompt.restore': string;
+    'panel.prompt.loading': string;
+    'panel.prompt.saved': string;
+    'reasoning.empty': string;
+    'reasoning.move': string;
+    'reasoning.expand': string;
+    'reasoning.collapse': string;
+    'status.retry': string;
+    'status.interrupted': string;
+    'status.turn.black': string;
+    'status.turn.white': string;
+    'status.thinking': string;
+    'status.paused': string;
+    'status.paused.hint': string;
+    'status.win.black': string;
+    'status.win.white': string;
+    'status.draw': string;
+    'status.error': string;
+    'status.side.hint': string;
+    'status.side.hint.white': string;
+    'status.side.hint.both': string;
+    'rule.first.tengen': string;
+};
+/** The gomoku namespace key union. */
+export type GomokuKey = keyof typeof zh;
+/** English dictionary, checked complete against the zh key set. */
+export declare const en: {
+    'tab.label': string;
+    'tab.description': string;
+    'jev.key.label': string;
+    'jev.key.placeholder': string;
+    'jev.key.replace': string;
+    'jev.key.hint': string;
+    'jev.key.save': string;
+    'jev.key.clear': string;
+    'jev.key.configured': string;
+    'jev.key.required': string;
+    'jev.key.invalid': string;
+    'jev.decision.hint': string;
+    'panel.mode': string;
+    'mode.black': string;
+    'mode.white': string;
+    'mode.both': string;
+    'panel.black': string;
+    'panel.white': string;
+    'panel.thinking': string;
+    'thinking.off': string;
+    'thinking.high': string;
+    'thinking.max': string;
+    'panel.model.black': string;
+    'panel.model.white': string;
+    'panel.newGame': string;
+    'panel.pause': string;
+    'panel.resume': string;
+    'panel.log.black': string;
+    'panel.log.white': string;
+    'panel.prompt.black': string;
+    'panel.prompt.white': string;
+    'panel.prompt.save': string;
+    'panel.prompt.restore': string;
+    'panel.prompt.loading': string;
+    'panel.prompt.saved': string;
+    'reasoning.empty': string;
+    'reasoning.move': string;
+    'reasoning.expand': string;
+    'reasoning.collapse': string;
+    'status.retry': string;
+    'status.interrupted': string;
+    'status.turn.black': string;
+    'status.turn.white': string;
+    'status.thinking': string;
+    'status.paused': string;
+    'status.paused.hint': string;
+    'status.win.black': string;
+    'status.win.white': string;
+    'status.draw': string;
+    'status.error': string;
+    'status.side.hint': string;
+    'status.side.hint.white': string;
+    'status.side.hint.both': string;
+    'rule.first.tengen': string;
+};

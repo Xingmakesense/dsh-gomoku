@@ -1,0 +1,92 @@
+{
+  "name": "@yejiming/dsh-gomoku",
+  "description": "Gomoku (five-in-a-row) for the dsh web GUI: AI move routes, model catalog, and default prompt (node half) plus a better-sidebar tab with the board (browser half)",
+  "version": "0.0.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "homepage": "https://github.com/Xingmakesense/dsh-gomoku#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Xingmakesense/dsh-gomoku.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Xingmakesense/dsh-gomoku/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-renderer"
+      ],
+      "platform": "web"
+    },
+    "engines": {
+      "dsh": ">=0.2.2-rc.3"
+    }
+  },
+  "scripts": {
+    "bundle": "tsdown",
+    "watch": "tsdown --watch",
+    "build": "tsdown && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:store": "node tests/store-logic.mjs"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/client.js.map",
+    "lib/types/**/*.d.ts",
+    "cordis.patch.yml"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/schemastery": "~3.18.5"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.1.0",
+    "@deepseek-ai/dsh-client-locale": "^0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.2.2-rc.3",
+    "@deepseek-ai/dsh-host-webserver": "^0.2.2-rc.3",
+    "@deepseek-ai/dsh-llm": "^0.2.2-rc.3",
+    "dsh-better-sidebar": "^0.32.1",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-client-locale": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-host-webserver": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.3",
+    "@types/node": "^24.0.0",
+    "@types/react": "~18.3.1",
+    "dsh-better-sidebar": "0.32.1",
+    "lightningcss": "^1.32.0",
+    "react": "^18.2.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^3.0.0"
+  }
+}
