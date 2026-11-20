@@ -32,7 +32,9 @@ import type { IncomingMessage } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { BlockAssembler, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock, FinishReason, GenerateOptions, LlmModelInfo, RequestUserInput } from '@deepseek-ai/dsh-llm'
+import type {
+  ContentBlock, FinishReason, GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, RequestUserInput,
+} from '@deepseek-ai/dsh-llm'
 // Type-only: the ctx.webServer merge (the webserver host plugin).
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-llm'
@@ -309,6 +311,77 @@ export function isRetryableMoveFailure(error: unknown): boolean {
   return typeof code === 'string' && RETRYABLE_MOVE_FAILURE_CODES.has(code)
 }
 
+/** First backoff step between failed move attempts, in milliseconds. */
+export const RETRY_BASE_DELAY_MS = 500
+/** Backoff cap between failed move attempts, in milliseconds. */
+export const RETRY_MAX_DELAY_MS = 8_000
+
+/**
+ * Exponential backoff before retrying a failed attempt. Retrying a rate limit
+ * or a dropped stream immediately just burns the remaining attempts against
+ * the same limit; a short capped backoff lets the provider recover.
+ * @param attempt - the failed 1-based attempt number.
+ * @returns the local delay in milliseconds.
+ */
+export function retryDelayMs(attempt: number): number {
+  return Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(0, attempt - 1), RETRY_MAX_DELAY_MS)
+}
+
+/** Backoff with ±20% jitter, so parallel games do not retry in lockstep. */
+function jitteredDelayMs(attempt: number): number {
+  return Math.round(retryDelayMs(attempt) * (0.8 + Math.random() * 0.4))
+}
+
+/** Sleep that rejects as soon as the move is aborted (timeout / disconnect). */
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const fail = (): void => {
+      clearTimeout(timer)
+      reject(signal.reason instanceof Error ? signal.reason : new Error('gomoku: 落子请求已取消'))
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', fail)
+      resolve()
+    }, ms)
+    if (signal.aborted) {
+      clearTimeout(timer)
+      reject(signal.reason instanceof Error ? signal.reason : new Error('gomoku: 落子请求已取消'))
+      return
+    }
+    signal.addEventListener('abort', fail, { once: true })
+  })
+}
+
+/** How long one provider's model capabilities are trusted before a refresh. */
+const MODEL_INFO_TTL_MS = 5 * 60_000
+
+/** Provider/model capability cache, so a move does not pay a lookup roundtrip. */
+const modelInfoCache = new Map<string, { at: number; info: LlmResolvedModelInfo }>()
+
+/**
+ * Resolve one model's capabilities, cached for a few minutes. Every move used
+ * to re-resolve the model before it could even start streaming (an extra
+ * provider roundtrip, and one more failure point, on every single move).
+ * @param ctx - host context exposing the llm service.
+ * @param provider - registered provider route.
+ * @param model - model id.
+ * @param signal - cancellation.
+ * @returns the model info.
+ */
+async function cachedModelInfo(
+  ctx: Context,
+  provider: string,
+  model: string,
+  signal: AbortSignal,
+): Promise<LlmResolvedModelInfo> {
+  const key = provider + '/' + model
+  const cached = modelInfoCache.get(key)
+  if (cached !== undefined && Date.now() - cached.at < MODEL_INFO_TTL_MS) return cached.info
+  const info = await ctx.llm.resolveModelInfo(provider, model, signal)
+  modelInfoCache.set(key, { at: Date.now(), info })
+  return info
+}
+
 /**
  * Run one AI move attempt: stream the framed board through the chosen
  * provider/model route and assemble the reply text plus any reasoning blocks.
@@ -337,7 +410,7 @@ async function streamMoveText(
   }
   let reasoningEffort: ReasoningEffortId | undefined
   if (request.thinking !== undefined) {
-    const info = await ctx.llm.resolveModelInfo(request.provider, request.model, signal)
+    const info = await cachedModelInfo(ctx, request.provider, request.model, signal)
     if (info.reasoning?.efforts.some(effort => effort.id === request.thinking)) {
       reasoningEffort = ReasoningEffortId(request.thinking)
     }
@@ -467,6 +540,31 @@ export function apply(ctx: Context, config: Config): void {
     maxMoveAttempts: config.maxMoveAttempts,
   }
 
+  /** One finished move, kept for the /log diagnostics endpoint. */
+  interface MoveLogEntry {
+    /** ISO timestamp of the settlement. */
+    time: string
+    /** The side that was playing. */
+    side: GomokuSide
+    /** Provider route the move went through. */
+    provider: string
+    /** Model id the move went through. */
+    model: string
+    /** Attempts the node half used (0 = aborted before an attempt settled). */
+    attempts: number
+    /** End-to-end wall-clock time, in milliseconds. */
+    durationMs: number
+    /** Short outcome label ("move 7,7", "draw", "failed: ...", "aborted: ..."). */
+    outcome: string
+    /** The failure detail, when the move failed. */
+    detail?: string
+  }
+
+  /** How many finished moves the diagnostics ring keeps. */
+  const MOVE_LOG_LIMIT = 40
+  /** Finished moves of this plugin instance, newest last. */
+  const moveLog: MoveLogEntry[] = []
+
   /** Collect the request body into a parsed JSON value. */
   const readJson = async (req: IncomingMessage): Promise<unknown> => {
     const chunks: Buffer[] = []
@@ -482,6 +580,9 @@ export function apply(ctx: Context, config: Config): void {
       path: GOMOKU_PATH,
       handler: async (req, res) => {
         const writeJson = (status: number, body: unknown): void => {
+          // The board page can navigate away mid-move; never write to a socket
+          // that is already gone.
+          if (res.writableEnded || res.destroyed) return
           res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
           res.end(JSON.stringify(body))
         }
@@ -490,6 +591,12 @@ export function apply(ctx: Context, config: Config): void {
           const segments = url.pathname.slice(GOMOKU_PATH.length).split('/').filter(Boolean)
           if (req.method === 'GET' && segments.length === 1 && segments[0] === 'prompt') {
             writeJson(200, { prompt: DEFAULT_SYSTEM_PROMPT })
+            return
+          }
+          if (req.method === 'GET' && segments.length === 1 && segments[0] === 'log') {
+            // Diagnostics: the last moves with their timing and outcome. This is
+            // what makes "the third move felt slow" answerable after the fact.
+            writeJson(200, { entries: moveLog })
             return
           }
           if (req.method === 'GET' && segments.length === 1 && segments[0] === 'models') {
@@ -519,11 +626,33 @@ export function apply(ctx: Context, config: Config): void {
             // deployment policy from the loader config.
             const effectiveTimeoutMs = request.moveTimeoutMs ?? resolved.moveTimeoutMs
             const effectiveMaxTokens = request.maxMoveOutputTokens ?? resolved.maxMoveOutputTokens
+            const startedAt = Date.now()
+            const elapsed = (): number => Date.now() - startedAt
             const controller = new AbortController()
             const timer = setTimeout(
               () => { controller.abort(new Error('gomoku: AI 落子超时')) },
               effectiveTimeoutMs,
             )
+            // Stop generating when the browser goes away (closed tab, reload,
+            // new game): an abandoned move must not keep burning provider
+            // tokens or holding a rate-limit slot.
+            const onResponseClose = (): void => {
+              if (!res.writableFinished) controller.abort(new Error('gomoku: 客户端已断开'))
+            }
+            res.on('close', onResponseClose)
+            /** Record one settled move in the diagnostics ring and the logger. */
+            const settle = (outcome: string, attempts: number, detail?: string): void => {
+              moveLog.push({
+                time: new Date().toISOString(), side: request.side, provider: request.provider,
+                model: request.model, attempts, durationMs: elapsed(), outcome,
+                ...(detail !== undefined ? { detail } : {}),
+              })
+              if (moveLog.length > MOVE_LOG_LIMIT) moveLog.splice(0, moveLog.length - MOVE_LOG_LIMIT)
+              ctx.logger.info(
+                'gomoku: %s move via %s/%s took %dms over %d attempt(s): %s',
+                request.side, request.provider, request.model, elapsed(), attempts, outcome,
+              )
+            }
             try {
               const system = request.system !== undefined && request.system.trim().length > 0
                 ? request.system
@@ -531,7 +660,9 @@ export function apply(ctx: Context, config: Config): void {
               let lastText: string | undefined
               let lastReason: string | undefined
               let lastReasoning = ''
+              let attemptsUsed = 0
               for (let attempt = 1; attempt <= resolved.maxMoveAttempts; attempt += 1) {
+                attemptsUsed = attempt
                 const user = buildMoveUserMessage(request, lastText, lastReason)
                 let attemptText: MoveAttemptText
                 try {
@@ -542,14 +673,22 @@ export function apply(ctx: Context, config: Config): void {
                   // attempt — the model never saw a completed reply, so retry
                   // without corrective feedback. The last attempt falls through
                   // to the bounded failure response below instead of a raw 400.
+                  // Each retry backs off first: an immediate retry just hits the
+                  // same rate limit again and burns the attempt budget.
                   if (!isRetryableMoveFailure(error)) throw error
                   lastText = undefined
                   lastReason = error instanceof Error ? error.message : String(error)
                   // A failed stream carries no usable reasoning; drop any
                   // earlier attempt's text so the error response stays honest.
                   lastReasoning = ''
-                  ctx.logger.warn('gomoku: transient AI move failure: %s', lastReason)
-                  if (attempt < resolved.maxMoveAttempts) continue
+                  ctx.logger.warn(
+                    'gomoku: transient AI move failure (attempt %d/%d): %s',
+                    attempt, resolved.maxMoveAttempts, lastReason,
+                  )
+                  if (attempt < resolved.maxMoveAttempts) {
+                    await sleep(jitteredDelayMs(attempt), controller.signal)
+                    continue
+                  }
                   break
                 }
                 const text = attemptText.text
@@ -559,30 +698,59 @@ export function apply(ctx: Context, config: Config): void {
                   if (!isLegalMove(request.board, reply.row, reply.col)) {
                     lastText = text
                     lastReason = `目标交叉点 [${reply.row}, ${reply.col}] 已被占用或越界`
+                    if (attempt < resolved.maxMoveAttempts) {
+                      await sleep(jitteredDelayMs(attempt), controller.signal)
+                    }
                     continue
                   }
-                  writeJson(200, { move: { row: reply.row, col: reply.col }, reasoning: lastReasoning })
+                  settle('move ' + reply.row + ',' + reply.col, attempt)
+                  writeJson(200, {
+                    move: { row: reply.row, col: reply.col },
+                    reasoning: lastReasoning,
+                    durationMs: elapsed(),
+                    attempts: attempt,
+                  })
                   return
                 }
                 if (reply.kind === 'draw') {
-                  writeJson(200, { draw: true, reasoning: lastReasoning })
+                  settle('draw', attempt)
+                  writeJson(200, {
+                    draw: true, reasoning: lastReasoning, durationMs: elapsed(), attempts: attempt,
+                  })
                   return
                 }
                 if (reply.kind === 'error') {
-                  writeJson(200, { error: `AI 报告：${reply.message}`, reasoning: lastReasoning })
+                  settle('ai-error: ' + reply.message, attempt, reply.message)
+                  writeJson(200, {
+                    error: `AI 报告：${reply.message}`,
+                    reasoning: lastReasoning,
+                    durationMs: elapsed(),
+                    attempts: attempt,
+                  })
                   return
                 }
                 lastText = text
                 lastReason = attemptText.truncated
                   ? 'AI 回复被截断（超过最大输出长度），可能未输出完整的 JSON'
                   : reply.reason
+                if (attempt < resolved.maxMoveAttempts) {
+                  await sleep(jitteredDelayMs(attempt), controller.signal)
+                }
               }
+              settle('failed: ' + (lastReason ?? 'unknown'), attemptsUsed, lastReason)
               writeJson(200, {
                 error: `AI 连续 ${resolved.maxMoveAttempts} 次未能完成落子（最后原因：${lastReason ?? '未知'}）`,
                 reasoning: lastReasoning,
+                durationMs: elapsed(),
+                attempts: attemptsUsed,
               })
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error)
+              settle('aborted: ' + message, 0, message)
+              throw error
             } finally {
               clearTimeout(timer)
+              res.off('close', onResponseClose)
             }
             return
           }
@@ -593,6 +761,11 @@ export function apply(ctx: Context, config: Config): void {
         }
       },
     })
-    return () => { dispose() }
+    return () => {
+      // Drop the capability cache with the plugin: a re-registered adapter may
+      // advertise different efforts.
+      modelInfoCache.clear()
+      dispose()
+    }
   }, 'gomoku: routes + move lifecycle')
 }

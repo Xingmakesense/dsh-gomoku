@@ -13,6 +13,10 @@ export interface ReasoningEntry {
     error?: string;
     /** True when the request was cut off (aborted/timed out) mid-thought. */
     interrupted?: boolean;
+    /** Wall-clock time the node half spent on this attempt chain, in ms. */
+    durationMs?: number;
+    /** How many model attempts the node half needed (1 = first try landed). */
+    attempts?: number;
 }
 /** The playable game state (board, turn, outcome, log). */
 export interface GameState {
@@ -25,6 +29,8 @@ export interface GameState {
     draw: boolean;
     /** True while an AI move request is in flight. */
     thinking: boolean;
+    /** When the in-flight request started (ms epoch); absent while idle. */
+    thinkingSince?: number;
     /** True in manual-takeover (pause) mode: AI requests are cut off and the
      *  human plays both sides until the pause is released. */
     paused: boolean;

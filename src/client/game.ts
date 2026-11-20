@@ -68,6 +68,10 @@ export interface MoveResponse {
   error?: string
   /** The model's reasoning text for this attempt, when present. */
   reasoning?: string
+  /** Wall-clock time the node half spent on this move (all attempts), in ms. */
+  durationMs?: number
+  /** How many model attempts the node half needed (1 = first try landed). */
+  attempts?: number
 }
 
 /**

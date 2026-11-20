@@ -27,6 +27,10 @@ export interface ReasoningEntry {
   error?: string
   /** True when the request was cut off (aborted/timed out) mid-thought. */
   interrupted?: boolean
+  /** Wall-clock time the node half spent on this attempt chain, in ms. */
+  durationMs?: number
+  /** How many model attempts the node half needed (1 = first try landed). */
+  attempts?: number
 }
 
 /** The playable game state (board, turn, outcome, log). */
@@ -40,6 +44,8 @@ export interface GameState {
   draw: boolean
   /** True while an AI move request is in flight. */
   thinking: boolean
+  /** When the in-flight request started (ms epoch); absent while idle. */
+  thinkingSince?: number
   /** True in manual-takeover (pause) mode: AI requests are cut off and the
    *  human plays both sides until the pause is released. */
   paused: boolean
@@ -547,7 +553,12 @@ function scheduleAi(attempt: number = 1): void {
     }] })
     return
   }
-  commitGame({ ...game, thinking: true })
+  // A new move supersedes anything still in flight (a resume racing a stale
+  // timer, a retry click): abort it first, so two models never generate at
+  // once and a late reply can never overwrite the new request.
+  abort?.abort()
+  const startedAt = Date.now()
+  commitGame({ ...game, thinking: true, thinkingSince: startedAt })
   const controller = new AbortController()
   abort = controller
   const seq = ++requestSeq
@@ -573,7 +584,7 @@ function scheduleAi(attempt: number = 1): void {
     .then((reply: MoveResponse) => {
       window.clearTimeout(watchdog)
       if (gen !== generation || seq !== requestSeq) return
-      applyAiReply(reply, turn, gen, attempt)
+      applyAiReply(reply, turn, gen, attempt, Date.now() - startedAt)
     })
     .catch((error: unknown) => {
       window.clearTimeout(watchdog)
@@ -587,8 +598,10 @@ function scheduleAi(attempt: number = 1): void {
         commitGame({
           ...current,
           thinking: false,
+          thinkingSince: undefined,
           log: [...current.log, {
             n: current.moveCount + 1, side: sideOf(turn), move: null, reasoning: '', interrupted: true,
+            durationMs: Date.now() - startedAt,
           }],
         })
         return
@@ -597,13 +610,22 @@ function scheduleAi(attempt: number = 1): void {
       commitGame({
         ...current,
         thinking: false,
-        log: [...current.log, { n: current.moveCount + 1, side: sideOf(turn), move: null, reasoning: '', error: message }],
+        log: [...current.log, {
+          n: current.moveCount + 1, side: sideOf(turn), move: null, reasoning: '', error: message,
+          durationMs: Date.now() - startedAt,
+        }],
       })
     })
 }
 
 /** Apply one settled AI reply for the turn it was requested for. */
-function applyAiReply(reply: MoveResponse, turn: Cell, gen: number, attempt: number): void {
+function applyAiReply(
+  reply: MoveResponse,
+  turn: Cell,
+  gen: number,
+  attempt: number,
+  durationMs: number,
+): void {
   const { game, settings } = snapshot
   // `thinking` guards stale replies landing after an interruption (the seq
   // guard above already filtered superseded requests).
@@ -617,16 +639,23 @@ function applyAiReply(reply: MoveResponse, turn: Cell, gen: number, attempt: num
         // move has now settled, so the flag must drop before commit or the
         // board stays locked on "AI 思考中".
         thinking: false,
+        thinkingSince: undefined,
         log: [...next.log, {
           n: next.moveCount,
           side: sideOf(turn),
           move: `${reply.move.row},${reply.move.col}`,
           reasoning: reply.reasoning ?? '',
+          // Prefer the node half's own wall clock (it excludes the network hop);
+          // fall back to the client measurement for older node halves.
+          durationMs: reply.durationMs ?? durationMs,
+          ...(reply.attempts !== undefined ? { attempts: reply.attempts } : {}),
         }],
       }
       commitGame(withLog)
       if (!gameOver(withLog) && isAiTurn(settings.mode, withLog.turn)) {
-        window.setTimeout(() => { if (gen === generation) scheduleAi() }, 350)
+        // A zero-delay hop keeps the next move flowing; a timed pause would be
+        // throttled to seconds in a backgrounded sidebar tab.
+        window.setTimeout(() => { if (gen === generation) scheduleAi() }, 0)
       }
       return
     }
@@ -635,19 +664,24 @@ function applyAiReply(reply: MoveResponse, turn: Cell, gen: number, attempt: num
     // attempt budget before failing the move. Clear the thinking flag first
     // so the re-entrant scheduleAi can pass its own in-flight guard.
     if (attempt < MAX_AI_ATTEMPTS) {
-      commitGame({ ...game, thinking: false })
-      window.setTimeout(() => { if (gen === generation) scheduleAi(attempt + 1) }, 200)
+      commitGame({ ...game, thinking: false, thinkingSince: undefined })
+      window.setTimeout(() => { if (gen === generation) scheduleAi(attempt + 1) }, 0)
       return
     }
   }
   if (reply.draw === true) {
-    commitGame({ ...game, thinking: false, draw: true })
+    commitGame({ ...game, thinking: false, thinkingSince: undefined, draw: true })
     return
   }
   const error = reply.error ?? 'unknown error'
   commitGame({
     ...game,
     thinking: false,
-    log: [...game.log, { n: game.moveCount + 1, side: sideOf(turn), move: null, reasoning: reply.reasoning ?? '', error }],
+    thinkingSince: undefined,
+    log: [...game.log, {
+      n: game.moveCount + 1, side: sideOf(turn), move: null, reasoning: reply.reasoning ?? '', error,
+      durationMs: reply.durationMs ?? durationMs,
+      ...(reply.attempts !== undefined ? { attempts: reply.attempts } : {}),
+    }],
   })
 }

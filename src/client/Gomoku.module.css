@@ -1,18 +1,15 @@
-/* Gomoku Better Sidebar page styles: the board column with both AI panels
-   stacked under it (the sidebar is narrow), grid lines through intersections.
-   Chrome rides the host's --dsw-alias-* tokens (light/dark adaptive) with
-   local fallbacks; the board itself is a fixed warm wood surface. */
+/* Gomoku page styles: the board column with both AI panels stacked under it
+   (the sidebar is narrow) and the one-column settings page, grid lines through
+   intersections. Chrome rides the host's --dsw-alias-* tokens (light/dark
+   adaptive) with local fallbacks; the board itself is a fixed warm wood
+   surface. */
 
-.view {
-  height: 100%;
-  overflow-y: auto;
-  padding: 12px;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-
-  /* Local design tokens: chrome (host-derived) + board (fixed, physical). */
+/* Local design tokens: chrome (host-derived) + board (fixed, physical).
+   Declared on every plugin surface, including the portaled model menu, which
+   leaves the plugin's DOM subtree and therefore cannot inherit them. */
+.view,
+.settings,
+.menu {
   --border: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.3));
   --border-soft: var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
   --panel-bg: var(--dsw-alias-bg-module-platform, rgba(128, 128, 128, 0.06));
@@ -24,10 +21,9 @@
   --label-tertiary: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.58));
   --error: var(--dsw-alias-state-error-primary, #e05252);
   --success: var(--dsw-alias-state-success-primary, #4caf50);
-  /* Floating surfaces (the model dropdown): the design system's elevated
-     layer, the same surface the host uses for dialogs and floating panes.
-     Canvas is the system-colour fallback, keyed off the color-scheme this
-     root publishes (theme.ts). */
+  /* Floating surfaces (the model menu): the design system's elevated layer,
+     the same surface the host uses for dialogs and floating panes. Canvas is
+     the system-colour fallback, keyed off the color-scheme the menu carries. */
   --popup-bg: var(--dsw-alias-bg-layer-2, Canvas);
   --popup-shadow: var(--dsw-elevation-prominent, 0 12px 32px rgba(0, 0, 0, 0.28));
 
@@ -49,46 +45,29 @@
   --serif: "Songti SC", "STSong", "Noto Serif CJK SC", Georgia, "Times New Roman", serif;
 }
 
-/* Settings page (Settings → Gomoku). Same chrome tokens as the board page. */
+/* The board page: one column inside the sidebar tab; never scrolls sideways. */
+.view {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* The settings page (Settings → Gomoku). The settings shell gives the plugin
+   one column of width, so the layout is a single column and nothing is
+   allowed to be wider than that column. */
 .settings {
-    /* Local design tokens: chrome (host-derived) + board (fixed, physical). */
-    --border: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.3));
-    --border-soft: var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.16));
-    --panel-bg: var(--dsw-alias-bg-module-platform, rgba(128, 128, 128, 0.06));
-    --well-bg: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.07));
-    --interactive-hover: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.12));
-    --interactive-active: var(--dsw-alias-interactive-bg-active, rgba(128, 128, 128, 0.2));
-    --label-primary: var(--dsw-alias-label-primary, inherit);
-    --label-secondary: var(--dsw-alias-label-secondary, rgba(128, 128, 128, 0.78));
-    --label-tertiary: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.58));
-    --error: var(--dsw-alias-state-error-primary, #e05252);
-    --success: var(--dsw-alias-state-success-primary, #4caf50);
-    /* Floating surfaces (the model dropdown): the design system's elevated
-       layer, the same surface the host uses for dialogs and floating panes. */
-    --popup-bg: var(--dsw-alias-bg-layer-2, Canvas);
-    --popup-shadow: var(--dsw-elevation-prominent, 0 12px 32px rgba(0, 0, 0, 0.28));
-  
-    /* Board: warm amber wood family (fixed, physical object). */
-    --wood-base: oklch(0.74 0.1 78);
-    --grid-ink: oklch(0.32 0.04 55 / 0.6);
-    --hoshi-ink: oklch(0.3 0.04 50 / 0.72);
-    --stone-black-rim: oklch(0.45 0.02 65);
-    --stone-black-core: oklch(0.16 0.01 60);
-    --stone-white-rim: oklch(0.99 0.005 90);
-    --stone-white-core: oklch(0.86 0.015 80);
-  
-    /* Accent family: amber for state/selection, cinnabar for the last move. */
-    --accent: oklch(0.72 0.12 72);
-    --accent-soft: oklch(0.72 0.12 72 / 0.22);
-    --cinnabar: oklch(0.55 0.17 30);
-  
-    /* Serif voice for the status line and headings. */
-    --serif: "Songti SC", "STSong", "Noto Serif CJK SC", Georgia, "Times New Roman", serif;
   display: flex;
   flex-direction: column;
   gap: 16px;
   padding: 4px 2px 28px;
-  max-width: 980px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
 }
 
@@ -107,11 +86,13 @@
   color: var(--label-secondary);
 }
 
+/* One column, always: the settings shell hands the page a single column of
+   width, so a multi-column grid would overflow it. */
 .settingsGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 16px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
 }
 
 .settingsCard {
@@ -119,6 +100,7 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 14px;
@@ -138,6 +120,8 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 14px;
@@ -710,6 +694,16 @@
   font-weight: 400;
 }
 
+/* Timing / retry facts next to a move: quiet, so they never compete with the
+   move itself. */
+.reasoningMeta {
+  margin-left: 6px;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--label-tertiary);
+  white-space: nowrap;
+}
+
 .errorText {
   color: var(--error);
   font-weight: 400;
@@ -914,7 +908,8 @@
    palette washes out on a white surface, so both roots deepen it one step.
    Each root publishes the scheme it resolved from the host (see theme.ts). */
 .view[data-gomoku-theme='light'],
-.settings[data-gomoku-theme='light'] {
+.settings[data-gomoku-theme='light'],
+.menu[data-gomoku-theme='light'] {
   --accent: oklch(0.62 0.14 62);
   --accent-soft: oklch(0.62 0.14 62 / 0.16);
 }

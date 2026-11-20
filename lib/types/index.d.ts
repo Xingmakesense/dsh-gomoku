@@ -157,6 +157,18 @@ export declare function parseMoveReply(text: string): MoveReply;
  * @returns true when the failure carries one of the retryable codes.
  */
 export declare function isRetryableMoveFailure(error: unknown): boolean;
+/** First backoff step between failed move attempts, in milliseconds. */
+export declare const RETRY_BASE_DELAY_MS = 500;
+/** Backoff cap between failed move attempts, in milliseconds. */
+export declare const RETRY_MAX_DELAY_MS = 8000;
+/**
+ * Exponential backoff before retrying a failed attempt. Retrying a rate limit
+ * or a dropped stream immediately just burns the remaining attempts against
+ * the same limit; a short capped backoff lets the provider recover.
+ * @param attempt - the failed 1-based attempt number.
+ * @returns the local delay in milliseconds.
+ */
+export declare function retryDelayMs(attempt: number): number;
 /**
  * Validate an untrusted move-request body into a typed request.
  * @param value - the parsed request body.

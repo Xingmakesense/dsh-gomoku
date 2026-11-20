@@ -1,7 +1,7 @@
 {
   "name": "@xingmakesense/dsh-gomoku",
   "description": "Gomoku (five-in-a-row) for the dsh web GUI: AI move routes, model catalog, and default prompt (node half) plus a better-sidebar tab with the board (browser half)",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publishConfig": {
     "access": "public"
   },
@@ -72,7 +72,13 @@
     "@deepseek-ai/dsh-host-webserver": "^0.2.2-rc.3",
     "@deepseek-ai/dsh-llm": "^0.2.2-rc.3",
     "dsh-better-sidebar": "^0.32.1",
-    "react": "^18.2.0"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "peerDependenciesMeta": {
+    "react-dom": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.1.0",
@@ -84,9 +90,11 @@
     "@deepseek-ai/dsh-llm": "0.2.2-rc.3",
     "@types/node": "^24.0.0",
     "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.1",
     "dsh-better-sidebar": "0.32.1",
     "lightningcss": "^1.32.0",
     "react": "^18.2.0",
+    "react-dom": "18.3.1",
     "tsdown": "^0.22.2",
     "typescript": "^6.0.3",
     "vitest": "^3.0.0"

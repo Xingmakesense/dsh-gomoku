@@ -1,4 +1,5 @@
 import { type DropdownGroup } from './dropdown-logic.ts';
+import type { ColorScheme } from './theme.ts';
 /** Props of one dropdown: the label above it plus the option groups. */
 export interface DropdownProps {
     /** Field label, rendered above the trigger and used as its accessible name. */
@@ -15,6 +16,8 @@ export interface DropdownProps {
     onChange: (value: string) => void;
     /** Renders the trigger inert (e.g. the catalog is still loading). */
     disabled?: boolean;
+    /** The appearance the portaled menu paints itself in. */
+    scheme?: ColorScheme;
 }
 /** The model picker: a token-themed listbox. */
-export declare function Dropdown({ label, value, groups, placeholder, emptyText, onChange, disabled, }: DropdownProps): import("react").JSX.Element;
+export declare function Dropdown({ label, value, groups, placeholder, emptyText, onChange, disabled, scheme, }: DropdownProps): import("react").JSX.Element;

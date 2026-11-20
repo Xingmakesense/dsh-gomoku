@@ -9,6 +9,8 @@ import * as gomoku from '../src/index.ts'
 // Only the provider transport is fake: these tests never spend model tokens.
 class TestAdapter extends LlmAdapter {
   calls: GenerateOptions[] = []
+  /** How many times the runtime resolved a model's capabilities. */
+  resolved = 0
   replies = ['{"move":[7,7]}']
 
   async listModels(provider: string) {
@@ -17,6 +19,7 @@ class TestAdapter extends LlmAdapter {
   }
 
   async resolveModel(provider: string, id: string) {
+    this.resolved += 1
     return {
       provider, id, name: 'Test model',
       reasoning: {
@@ -81,7 +84,9 @@ describe('DSH host integration', () => {
   it('streams an identity-free move request with reasoning and schema defaults', async () => {
     const response = await post(base, request({ thinking: 'high' }))
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ move: { row: 7, col: 7 }, reasoning: 'Choose the center.' })
+    expect(await response.json()).toMatchObject({
+      move: { row: 7, col: 7 }, reasoning: 'Choose the center.', attempts: 1,
+    })
     expect(adapter.calls).toHaveLength(1)
     expect(adapter.calls[0]).toMatchObject({
       maxTokens: 32000, reasoningEffort: 'high', system: gomoku.DEFAULT_SYSTEM_PROMPT,
@@ -106,6 +111,37 @@ describe('DSH host integration', () => {
     expect(JSON.stringify(adapter.calls[1].messages)).toContain('已被占用')
   })
 
+  it('resolves model capabilities once and records per-move diagnostics', async () => {
+    const before = adapter.resolved
+    expect((await post(base, request({ thinking: 'high' }))).status).toBe(200)
+    const afterFirst = adapter.resolved
+    expect((await post(base, request({ thinking: 'high' }))).status).toBe(200)
+    const afterSecond = adapter.resolved
+    // The runtime resolves a model while streaming too; the plugin's own cached
+    // lookup must vanish from the second move, so it is exactly one call fewer.
+    const firstMoveLookups = afterFirst - before
+    const secondMoveLookups = afterSecond - afterFirst
+    expect(secondMoveLookups).toBe(firstMoveLookups - 1)
+
+    const body = await (await fetch(`${base}/log`)).json() as {
+      entries: { side: string; attempts: number; durationMs: number; outcome: string }[]
+    }
+    expect(body.entries).toHaveLength(2)
+    expect(body.entries[0]).toMatchObject({ side: 'black', attempts: 1, outcome: 'move 7,7' })
+    expect(body.entries[0]!.durationMs).toBeGreaterThanOrEqual(0)
+  })
+
+  it('backs off before retrying a rejected move instead of hammering the provider', async () => {
+    adapter.replies = ['{"move":[7,7]}', '{"move":[7,8]}']
+    const board = Array(225).fill(0)
+    board[7 * 15 + 7] = 1
+    const startedAt = Date.now()
+    const response = await post(base, request({ side: 'white', board }))
+    expect(await response.json()).toMatchObject({ move: { row: 7, col: 8 }, attempts: 2 })
+    // One retry means one backoff step (>= 400ms with jitter).
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(400)
+  })
+
   it('rejects malformed requests without calling a model and removes routes on unload', async () => {
     expect((await post(base, request({ board: [] }))).status).toBe(400)
     expect(adapter.calls).toHaveLength(0)
@@ -121,7 +157,7 @@ describe('DSH host integration', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((url, options) =>
       url === 'https://api.typesafe.ai/v1/systemone' ? upstream(url, options) : nativeFetch(url, options))
     const body = request({ provider: 'gomoku-jev', model: 'jev-latest', jevApiKey: 'test-only-key' })
-    expect(await (await post(base, body)).json()).toEqual({ move: { row: 7, col: 7 }, reasoning: '' })
+    expect(await (await post(base, body)).json()).toMatchObject({ move: { row: 7, col: 7 }, reasoning: '' })
     expect(upstream).toHaveBeenCalledTimes(1)
     expect(adapter.calls).toHaveLength(0)
     const missing = await post(base, { ...body, jevApiKey: '' })

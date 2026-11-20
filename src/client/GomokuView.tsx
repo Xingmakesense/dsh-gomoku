@@ -181,6 +181,24 @@ export function GomokuView({ ctx, t }: GomokuViewProps) {
   useEffect(() => { loadModels() }, [])
 
   const status = statusCopy(game, t)
+  // A live elapsed counter turns a silent wait into visible progress: the
+  // second and later AI moves can take minutes on a reasoning model, and an
+  // unexplained pause used to read as "stuck".
+  const [thinkSeconds, setThinkSeconds] = useState(0)
+  useEffect(() => {
+    if (!game.thinking || game.thinkingSince === undefined) {
+      setThinkSeconds(0)
+      return
+    }
+    const since = game.thinkingSince
+    const read = (): void => { setThinkSeconds(Math.max(0, Math.floor((Date.now() - since) / 1000))) }
+    read()
+    const timer = window.setInterval(read, 1000)
+    return () => { window.clearInterval(timer) }
+  }, [game.thinking, game.thinkingSince])
+  const statusText = game.thinking && thinkSeconds > 0
+    ? t('status.thinking.elapsed', { s: thinkSeconds })
+    : status.text
   const settled = game.winner !== EMPTY || game.draw
   const humanTurn = (settings.mode === 'black' && game.turn === BLACK)
     || (settings.mode === 'white' && game.turn === WHITE)
@@ -200,7 +218,7 @@ export function GomokuView({ ctx, t }: GomokuViewProps) {
     >
       <div className={css.statusRow}>
         <span className={css.statusDot + ' ' + statusDot} aria-hidden="true" />
-        <div className={css.status + (status.error ? ' ' + css.statusError : '')}>{status.text}</div>
+        <div className={css.status + (status.error ? ' ' + css.statusError : '')}>{statusText}</div>
         {retryableError && (
           <button type="button" className={css.retry} onClick={retryMove}>{t('status.retry')}</button>
         )}

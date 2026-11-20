@@ -21,7 +21,7 @@ import css from './Gomoku.module.css'
 import { JEV_PROVIDER } from '../jev-shared.ts'
 import { JevKeyEditor } from './JevKeyEditor.tsx'
 import { Dropdown } from './Dropdown.tsx'
-import { useColorScheme } from './theme.ts'
+import { useColorScheme, type ColorScheme } from './theme.ts'
 
 /** Props of the settings page: the locale seat plus the settings shell's close. */
 export type GomokuSettingsProps = PropsLocale<'gomoku'> & { close: () => void }
@@ -40,13 +40,14 @@ const THINKINGS: readonly { value: Thinking; key: GomokuKey }[] = [
  * provider never silently switches sides.
  */
 function ModelSelect({
-  label, value, groups, onChange, t,
+  label, value, groups, onChange, t, scheme,
 }: {
   label: string
   value: SideModel
   groups: readonly ModelGroup[]
   onChange: (model: SideModel) => void
   t: GomokuT
+  scheme: ColorScheme
 }) {
   const selected = value.provider !== undefined && value.model !== undefined
     ? value.provider + '/' + value.model
@@ -75,6 +76,7 @@ function ModelSelect({
       placeholder={t('model.placeholder')}
       emptyText={t('model.empty')}
       disabled={groups.length === 0 && selected === ''}
+      scheme={scheme}
       onChange={(next) => {
         const [provider, ...rest] = next.split('/')
         onChange({ provider, model: rest.join('/') })
@@ -165,7 +167,7 @@ function PromptEditor({
 
 /** One side's configuration card: model, thinking level, prompt and log. */
 function SideSettings({
-  heading, stone, settings, logs, expanded, t, onToggle,
+  heading, stone, settings, logs, expanded, t, onToggle, scheme,
 }: {
   heading: string
   stone: 'black' | 'white'
@@ -174,6 +176,7 @@ function SideSettings({
   expanded: ReadonlySet<number>
   t: GomokuT
   onToggle: (n: number) => void
+  scheme: ColorScheme
 }) {
   const isBlack = stone === 'black'
   const model = isBlack ? settings.blackModel : settings.whiteModel
@@ -191,6 +194,7 @@ function SideSettings({
         groups={settings.groups}
         onChange={(next) => patchSettings(isBlack ? { blackModel: next } : { whiteModel: next })}
         t={t}
+        scheme={scheme}
       />
       {model.provider === JEV_PROVIDER
         ? <p className={css.settingsNote}>{t('jev.decision.hint')}</p>
@@ -236,6 +240,14 @@ function SideSettings({
                   {t('reasoning.move', { n: entry.n })}
                   {entry.move !== null && <span className={css.reasoningCoord}>{entry.move}</span>}
                 </span>
+                {entry.durationMs !== undefined && (
+                  <span className={css.reasoningMeta}>
+                    {t('reasoning.duration', { s: (entry.durationMs / 1000).toFixed(1) })}
+                  </span>
+                )}
+                {entry.attempts !== undefined && entry.attempts > 1 && (
+                  <span className={css.reasoningMeta}>{t('reasoning.attempts', { n: entry.attempts })}</span>
+                )}
                 {entry.interrupted === true && <span className={css.errorText}>{t('status.interrupted')}</span>}
                 {entry.error !== undefined && entry.interrupted !== true && <span className={css.errorText}>{entry.error}</span>}
               </button>
@@ -299,6 +311,7 @@ export function GomokuSettings({ t }: GomokuSettingsProps) {
           expanded={expanded}
           t={t}
           onToggle={toggleEntry}
+          scheme={scheme}
         />
         <SideSettings
           heading={t('panel.white')}
@@ -308,6 +321,7 @@ export function GomokuSettings({ t }: GomokuSettingsProps) {
           expanded={expanded}
           t={t}
           onToggle={toggleEntry}
+          scheme={scheme}
         />
       </div>
 

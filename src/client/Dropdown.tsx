@@ -7,17 +7,23 @@
  * list itself, entirely from the plugin's `--dsw-alias-*` tokens, so the
  * picker follows the light and dark appearances like the rest of the page.
  *
- * The menu is painted with `position: fixed` and clamped into the viewport
- * (see dropdown-logic.ts), so it is neither clipped by a scrolling settings
- * page nor by the sidebar column. Keyboard: Arrow/Home/End move, Enter/Space
+ * The menu is portaled onto `document.body` and painted with
+ * `position: fixed` (coordinates from dropdown-logic.ts). The portal matters:
+ * a settings shell that animates with a transform makes every
+ * `position: fixed` descendant position itself against that transformed
+ * ancestor instead of the viewport, which put the list hundreds of pixels off
+ * its trigger. Detached from that ancestor it is also never clipped by the
+ * settings scroll container. Keyboard: Arrow/Home/End move, Enter/Space
  * choose, Escape closes, Tab leaves; focus stays on the trigger and the active
  * row is published through `aria-activedescendant`.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   buildRows, flattenGroups, indexOfValue, labelOfValue, menuBox, stepIndex,
   type DropdownGroup, type MenuBox,
 } from './dropdown-logic.ts'
+import type { ColorScheme } from './theme.ts'
 import css from './Gomoku.module.css'
 
 /** Props of one dropdown: the label above it plus the option groups. */
@@ -36,11 +42,13 @@ export interface DropdownProps {
   onChange: (value: string) => void
   /** Renders the trigger inert (e.g. the catalog is still loading). */
   disabled?: boolean
+  /** The appearance the portaled menu paints itself in. */
+  scheme?: ColorScheme
 }
 
 /** The model picker: a token-themed listbox. */
 export function Dropdown({
-  label, value, groups, placeholder, emptyText, onChange, disabled = false,
+  label, value, groups, placeholder, emptyText, onChange, disabled = false, scheme,
 }: DropdownProps) {
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)
@@ -186,17 +194,19 @@ export function Dropdown({
         <span className={css.triggerChevron + (open ? ' ' + css.triggerChevronOpen : '')} aria-hidden="true">▾</span>
       </button>
 
-      {open && box !== null && (
+      {open && box !== null && typeof document !== 'undefined' && createPortal(
         <div
           ref={menuRef}
           id={listId}
           role="listbox"
           aria-labelledby={labelId}
+          data-gomoku-theme={scheme}
           className={css.menu}
           style={{
             left: box.left,
             width: box.width,
             maxHeight: box.maxHeight,
+            colorScheme: scheme,
             ...(box.top !== undefined ? { top: box.top } : { bottom: box.bottom }),
           }}
         >
@@ -225,7 +235,8 @@ export function Dropdown({
                 {row.option.value === value && <span className={css.menuCheck} aria-hidden="true">✓</span>}
               </div>
             ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

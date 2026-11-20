@@ -51,6 +51,8 @@ export declare const zh: {
     'panel.prompt.saved': string;
     'reasoning.empty': string;
     'reasoning.move': string;
+    'reasoning.attempts': string;
+    'reasoning.duration': string;
     'reasoning.expand': string;
     'reasoning.collapse': string;
     'status.retry': string;
@@ -58,6 +60,7 @@ export declare const zh: {
     'status.turn.black': string;
     'status.turn.white': string;
     'status.thinking': string;
+    'status.thinking.elapsed': string;
     'status.paused': string;
     'status.paused.hint': string;
     'status.win.black': string;
@@ -121,6 +124,8 @@ export declare const en: {
     'panel.prompt.saved': string;
     'reasoning.empty': string;
     'reasoning.move': string;
+    'reasoning.attempts': string;
+    'reasoning.duration': string;
     'reasoning.expand': string;
     'reasoning.collapse': string;
     'status.retry': string;
@@ -128,6 +133,7 @@ export declare const en: {
     'status.turn.black': string;
     'status.turn.white': string;
     'status.thinking': string;
+    'status.thinking.elapsed': string;
     'status.paused': string;
     'status.paused.hint': string;
     'status.win.black': string;
