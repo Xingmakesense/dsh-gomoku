@@ -460,6 +460,7 @@
    lands exactly on a crossing. The wood is layered: base amber, vertical
    grain, a soft top sheen, an edge vignette, then the ink grid lines. */
 .board {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(15, 1fr);
   aspect-ratio: 1;
@@ -467,7 +468,7 @@
   max-width: 520px;
   margin: 0 auto;
   border-radius: 12px;
-  overflow: hidden;
+  /* Tooltips may extend past the wood surface, so no clipping here. */
   background-color: var(--wood-base);
   background-image:
     repeating-linear-gradient(90deg, oklch(0.66 0.09 70 / 0.14) 0 1px, transparent 1px 6px),
@@ -483,8 +484,17 @@
   user-select: none;
 }
 
+/* Grid cell wrapper: owns hover/focus so the coordinate chip also works for
+   disabled intersections, and keeps the button filling the intersection. */
+.cellSlot {
+  position: relative;
+  min-width: 0;
+}
+
 .cell {
   position: relative;
+  width: 100%;
+  height: 100%;
   border: none;
   padding: 0;
   background: transparent;
@@ -743,4 +753,21 @@
   .preview {
     transition: none;
   }
+}
+/* Styled coordinate chip replacing the browser's native title tooltip. */
+.coordTip {
+  position: absolute;
+  z-index: 4;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid oklch(1 0 0 / 0.14);
+  background: oklch(0.22 0.01 260 / 0.94);
+  color: oklch(0.98 0.005 250);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 16px oklch(0.1 0 0 / 0.32);
 }

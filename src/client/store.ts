@@ -310,37 +310,102 @@ function placed(game: GameState, row: number, col: number): GameState | null {
 }
 
 /**
- * Fill an unset per-side selection from the first catalog model. A selection
- * the user already made (or persisted) is never overwritten.
+ * Fill an unusable per-side selection from the first catalog model.
+ *
+ * Catalog entries can advertise zero models (a provider whose listing failed
+ * or is still configuring). Taking groups[0] blindly would persist a
+ * selection with a provider but no model — later moves then fail with
+ * "model catalog unavailable" even though the catalog loaded. A selection is
+ * therefore usable only when BOTH its provider and model are set; otherwise
+ * the first provider that actually has a model wins. A valid user choice is
+ * never overwritten.
  */
 function fillDefaultModels(settings: SettingsState): SettingsState {
-  const first = settings.groups[0]
-  if (first === undefined) return settings
-  const next = { ...settings }
-  const defaultModel = first.models[0]?.id
-  if (next.blackModel.provider === undefined) {
-    next.blackModel = { provider: first.provider, model: defaultModel }
+  const firstWithModels = settings.groups.find(group => group.models.length > 0)
+  if (firstWithModels === undefined) return settings
+  const fallback: SideModel = {
+    provider: firstWithModels.provider,
+    model: firstWithModels.models[0]!.id,
   }
-  if (next.whiteModel.provider === undefined) {
-    next.whiteModel = { provider: first.provider, model: defaultModel }
+  const next = { ...settings }
+  if (next.blackModel.provider === undefined || next.blackModel.model === undefined) {
+    next.blackModel = { ...fallback }
+  }
+  if (next.whiteModel.provider === undefined || next.whiteModel.model === undefined) {
+    next.whiteModel = { ...fallback }
   }
   return next
+}
+
+/** The in-flight catalog request (one at a time; board and settings may both ask). */
+let modelsRequest: Promise<void> | null = null
+/** True when an AI move was requested before the catalog finished loading. */
+let pendingAiStart = false
+
+/** Record a model-catalog failure on the board (the retry button can re-run it). */
+function recordModelsFailure(message: string): void {
+  const { game } = snapshot
+  commitGame({
+    ...game,
+    log: [...game.log, {
+      n: game.moveCount + 1, side: sideOf(game.turn), move: null, reasoning: '', error: message,
+    }],
+  })
+}
+
+/** Start the AI move that was waiting for the catalog, if it is still wanted. */
+function startPendingAi(): void {
+  if (!pendingAiStart) return
+  pendingAiStart = false
+  const { game, settings } = snapshot
+  if (gameOver(game) || game.paused || game.thinking) return
+  const model = sideModelOf(settings, game.turn)
+  if (model.provider === undefined || model.model === undefined) {
+    recordModelsFailure(settings.modelsError ?? '模型目录中没有可用模型')
+    return
+  }
+  if (isAiTurn(settings.mode, game.turn)) scheduleAi()
 }
 
 /** Fetch the model catalog once; failures surface in settings.modelsError. */
 export function loadModels(): void {
   if (snapshot.settings.groups.length > 0) return
-  fetch('/plugins/gomoku/models')
-    .then(response => response.json() as Promise<{ groups?: ModelGroup[]; failures?: { provider: string; error: string }[] }>)
-    .then((body) => {
-      const groups = body.groups ?? []
-      const next = fillDefaultModels({ ...snapshot.settings, groups, modelsError: undefined })
-      commitSettings(next)
-    })
-    .catch((error: unknown) => {
-      if (snapshot.settings.groups.length > 0) return
-      commitSettings({ ...snapshot.settings, modelsError: error instanceof Error ? error.message : String(error) })
-    })
+  if (modelsRequest !== null) return
+  modelsRequest = fetchModels().finally(() => { modelsRequest = null })
+}
+
+/** The catalog request body as served by the node half. */
+interface ModelsBody {
+  groups?: ModelGroup[]
+  failures?: { provider: string; error: string }[]
+  /** Present on a non-OK response (route-level failure). */
+  error?: string
+}
+
+/** Run the catalog request and publish the outcome. */
+async function fetchModels(): Promise<void> {
+  try {
+    const response = await fetch('/plugins/gomoku/models', { headers: { accept: 'application/json' } })
+    let body: ModelsBody | undefined
+    try { body = await response.json() as ModelsBody } catch { body = undefined }
+    if (!response.ok) {
+      const detail = body?.error ?? body?.failures?.[0]?.error
+      throw new Error(detail ?? ('模型目录加载失败（HTTP ' + response.status + '）'))
+    }
+    const groups = body?.groups ?? []
+    if (groups.length === 0) throw new Error('模型目录为空')
+    commitSettings(fillDefaultModels({ ...snapshot.settings, groups, modelsError: undefined }))
+    startPendingAi()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (snapshot.settings.groups.length === 0) {
+      commitSettings({ ...snapshot.settings, modelsError: message })
+    }
+    if (pendingAiStart) {
+      pendingAiStart = false
+      recordModelsFailure(message)
+    }
+  }
 }
 
 /** Start a new game in the given mode (or the current one), opening with AI when required. */
@@ -458,12 +523,20 @@ function scheduleAi(attempt: number = 1): void {
   const turn = game.turn
   const model = sideModelOf(settings, turn)
   if (model.provider === undefined || model.model === undefined) {
+    if (settings.groups.length === 0) {
+      // The catalog has not arrived yet (tab opened / mode switched during the
+      // first fetch). Wait for it instead of reporting a failure the user
+      // cannot act on; the deferred start resumes once models are known.
+      pendingAiStart = true
+      loadModels()
+      return
+    }
     commitGame({
       ...game,
       thinking: false,
       log: [...game.log, {
         n: game.moveCount + 1, side: sideOf(turn), move: null,
-        reasoning: '', error: settings.modelsError ?? 'model catalog unavailable',
+        reasoning: '', error: settings.modelsError ?? '模型目录中没有可用模型',
       }],
     })
     return

@@ -7,7 +7,7 @@
  * tabs or collapsing the sidebar never resets a game or interrupts an
  * in-flight AI move.
  */
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { TabComponentProps } from 'dsh-better-sidebar'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { type GomokuT } from './i18n.ts'
@@ -98,7 +98,7 @@ function BoardHint({ paused, opening, mode, t }: {
 
 /** One intersection: clickable when it is the human's turn. */
 function CellButton({
-  row, col, cell, last, playable, preview, onClick,
+  row, col, cell, last, playable, preview, onClick, onHover, onLeave,
 }: {
   row: number
   col: number
@@ -108,22 +108,56 @@ function CellButton({
   /** The stone color shown as a ghost on hover (the side about to move). */
   preview: Cell
   onClick: (row: number, col: number) => void
+  /** Show the styled coordinate chip for this intersection. */
+  onHover: (row: number, col: number) => void
+  onLeave: () => void
 }) {
   const index = row * BOARD_SIZE + col
   return (
-    <button
-      type="button"
-      className={css.cell}
-      disabled={!playable}
-      aria-label={row + ',' + col}
-      title={row + ',' + col}
-      onClick={() => onClick(row, col)}
+    // The wrapper owns hover/focus because a disabled button still needs its
+    // coordinate chip while a game is thinking or settled.
+    <span
+      className={css.cellSlot}
+      onMouseEnter={() => onHover(row, col)}
+      onMouseLeave={onLeave}
+      onFocus={() => onHover(row, col)}
+      onBlur={onLeave}
     >
-      {cell !== EMPTY && <span className={css.stone + ' ' + (cell === BLACK ? css.stoneBlack : css.stoneWhite) + (last ? ' ' + css.lastMove : '')} />}
-      {cell === EMPTY && playable && preview !== EMPTY && <span className={css.stone + ' ' + (preview === BLACK ? css.stoneBlack : css.stoneWhite) + ' ' + css.preview} />}
-      {cell === EMPTY && HOSHI.has(index) && <span className={css.hoshi} />}
-    </button>
+      <button
+        type="button"
+        className={css.cell}
+        disabled={!playable}
+        aria-label={row + ',' + col}
+        onClick={() => onClick(row, col)}
+      >
+        {cell !== EMPTY && <span className={css.stone + ' ' + (cell === BLACK ? css.stoneBlack : css.stoneWhite) + (last ? ' ' + css.lastMove : '')} />}
+        {cell === EMPTY && playable && preview !== EMPTY && <span className={css.stone + ' ' + (preview === BLACK ? css.stoneBlack : css.stoneWhite) + ' ' + css.preview} />}
+        {cell === EMPTY && HOSHI.has(index) && <span className={css.hoshi} />}
+      </button>
+    </span>
   )
+}
+
+/**
+ * Position the coordinate chip above the hovered intersection, kept inside
+ * the board's left/right edges (and below the top rows so it never leaves
+ * the board surface).
+ */
+function coordTipStyle(row: number, col: number): { left: string; top: string; transform: string } {
+  const cell = 100 / BOARD_SIZE
+  const below = row < 2
+  const top = below ? (row + 1) * cell : row * cell
+  const translateY = below ? '8px' : 'calc(-100% - 8px)'
+  let left = (col + 0.5) * cell
+  let translateX = '-50%'
+  if (col <= 1) {
+    left = col * cell
+    translateX = '0'
+  } else if (col >= BOARD_SIZE - 2) {
+    left = (col + 1) * cell
+    translateX = '-100%'
+  }
+  return { left: left + '%', top: top + '%', transform: 'translate(' + translateX + ', ' + translateY + ')' }
 }
 
 /** The gomoku sidebar page body: board + game-start controls. */
@@ -134,6 +168,8 @@ export function GomokuView({ ctx, t }: GomokuViewProps) {
     () => ctx.locale.getSnapshot(),
   )
   const { game, settings } = useSyncExternalStore(subscribe, getSnapshot)
+  // The intersection under the pointer/focus, for the coordinate chip.
+  const [hovered, setHovered] = useState<{ row: number; col: number } | null>(null)
 
   // The catalog is needed the moment a game starts; the settings page also
   // calls this (idempotent once loaded).
@@ -178,9 +214,16 @@ export function GomokuView({ ctx, t }: GomokuViewProps) {
               playable={playable}
               preview={playable ? game.turn : EMPTY}
               onClick={placeStone}
+              onHover={(row, col) => setHovered({ row, col })}
+              onLeave={() => setHovered(null)}
             />
           )
         })}
+        {hovered !== null && (
+          <div className={css.coordTip} style={coordTipStyle(hovered.row, hovered.col)} aria-hidden="true">
+            {t('board.coord', { row: hovered.row, col: hovered.col })}
+          </div>
+        )}
       </div>
 
       {/* Below the board: the mode selector and the new-game / pause actions.
@@ -208,7 +251,6 @@ export function GomokuView({ ctx, t }: GomokuViewProps) {
             className={css.action}
             onClick={() => newGame()}
             aria-label={t('panel.newGame')}
-            title={t('panel.newGame')}
           >
             <svg className={css.actionIcon} viewBox="0 0 16 16" aria-hidden="true">
               <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -222,7 +264,6 @@ export function GomokuView({ ctx, t }: GomokuViewProps) {
             disabled={settled}
             onClick={togglePause}
             aria-label={game.paused ? t('panel.resume') : t('panel.pause')}
-            title={game.paused ? t('panel.resume') : t('panel.pause')}
           >
             <svg className={css.actionIcon} viewBox="0 0 16 16" aria-hidden="true">
               {game.paused ? (

@@ -6,6 +6,7 @@ export declare const zh: {
     'tab.label': string;
     'tab.description': string;
     'board.settings.hint': string;
+    'board.coord': string;
     'settings.label': string;
     'settings.title': string;
     'settings.intro': string;
@@ -72,6 +73,7 @@ export declare const en: {
     'tab.label': string;
     'tab.description': string;
     'board.settings.hint': string;
+    'board.coord': string;
     'settings.label': string;
     'settings.title': string;
     'settings.intro': string;

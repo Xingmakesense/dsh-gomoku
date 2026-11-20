@@ -152,9 +152,9 @@ function PromptEditor({
 
 /** One side's configuration card: model, thinking level, prompt and log. */
 function SideSettings({
-  title, stone, settings, logs, expanded, t, onToggle,
+  heading, stone, settings, logs, expanded, t, onToggle,
 }: {
-  title: string
+  heading: string
   stone: 'black' | 'white'
   settings: SettingsState
   logs: readonly ReasoningEntry[]
@@ -170,7 +170,7 @@ function SideSettings({
     <section className={css.settingsCard}>
       <div className={css.settingsCardTitle}>
         <span className={css.titleStone + ' ' + (isBlack ? css.titleStoneBlack : css.titleStoneWhite)} />
-        {title}
+        {heading}
       </div>
       <ModelSelect
         label={isBlack ? t('panel.model.black') : t('panel.model.white')}
@@ -269,7 +269,7 @@ export function GomokuSettings({ t }: GomokuSettingsProps) {
 
       <div className={css.settingsGrid}>
         <SideSettings
-          title={t('panel.black')}
+          heading={t('panel.black')}
           stone="black"
           settings={settings}
           logs={game.log.filter(entry => entry.side === 'black')}
@@ -278,7 +278,7 @@ export function GomokuSettings({ t }: GomokuSettingsProps) {
           onToggle={toggleEntry}
         />
         <SideSettings
-          title={t('panel.white')}
+          heading={t('panel.white')}
           stone="white"
           settings={settings}
           logs={game.log.filter(entry => entry.side === 'white')}
