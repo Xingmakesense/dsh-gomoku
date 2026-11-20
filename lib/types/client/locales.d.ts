@@ -35,6 +35,9 @@ export declare const zh: {
     'thinking.max': string;
     'panel.model.black': string;
     'panel.model.white': string;
+    'model.current': string;
+    'model.placeholder': string;
+    'model.empty': string;
     'panel.newGame': string;
     'panel.pause': string;
     'panel.resume': string;
@@ -102,6 +105,9 @@ export declare const en: {
     'thinking.max': string;
     'panel.model.black': string;
     'panel.model.white': string;
+    'model.current': string;
+    'model.placeholder': string;
+    'model.empty': string;
     'panel.newGame': string;
     'panel.pause': string;
     'panel.resume': string;

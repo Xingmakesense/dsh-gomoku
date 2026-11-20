@@ -7,7 +7,7 @@
  * tabs or collapsing the sidebar never resets a game or interrupts an
  * in-flight AI move.
  */
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { TabComponentProps } from 'dsh-better-sidebar'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { type GomokuT } from './i18n.ts'
@@ -21,6 +21,7 @@ import {
   type GameState,
 } from './store.ts'
 import css from './Gomoku.module.css'
+import { useColorScheme } from './theme.ts'
 
 /** The board page's full component props: the sidebar tab seat + the translator. */
 export type GomokuViewProps = TabComponentProps & { t: GomokuT }
@@ -170,6 +171,10 @@ export function GomokuView({ ctx, t }: GomokuViewProps) {
   const { game, settings } = useSyncExternalStore(subscribe, getSnapshot)
   // The intersection under the pointer/focus, for the coordinate chip.
   const [hovered, setHovered] = useState<{ row: number; col: number } | null>(null)
+  // Publish the host's active appearance on the page root so the native bits
+  // of the page (scrollbars, focus carets) follow the same palette.
+  const rootRef = useRef<HTMLDivElement>(null)
+  const scheme = useColorScheme(rootRef)
 
   // The catalog is needed the moment a game starts; the settings page also
   // calls this (idempotent once loaded).
@@ -187,7 +192,12 @@ export function GomokuView({ ctx, t }: GomokuViewProps) {
   const statusDot = statusDotClass(game, status.error, settled)
 
   return (
-    <div className={css.view}>
+    <div
+      className={css.view}
+      ref={rootRef}
+      data-gomoku-theme={scheme}
+      style={{ colorScheme: scheme }}
+    >
       <div className={css.statusRow}>
         <span className={css.statusDot + ' ' + statusDot} aria-hidden="true" />
         <div className={css.status + (status.error ? ' ' + css.statusError : '')}>{status.text}</div>

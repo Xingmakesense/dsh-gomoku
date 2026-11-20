@@ -20,6 +20,8 @@ import {
 import css from './Gomoku.module.css'
 import { JEV_PROVIDER } from '../jev-shared.ts'
 import { JevKeyEditor } from './JevKeyEditor.tsx'
+import { Dropdown } from './Dropdown.tsx'
+import { useColorScheme } from './theme.ts'
 
 /** Props of the settings page: the locale seat plus the settings shell's close. */
 export type GomokuSettingsProps = PropsLocale<'gomoku'> & { close: () => void }
@@ -30,43 +32,54 @@ const THINKINGS: readonly { value: Thinking; key: GomokuKey }[] = [
   { value: 'max', key: 'thinking.max' },
 ]
 
-/** One per-side model selector (keeps a persisted unknown model visible). */
+/**
+ * One per-side model selector. The dropdown is themed by the plugin itself
+ * (see Dropdown.tsx): a native select painted its option list with OS chrome
+ * that ignored the host palette. A persisted model missing from the catalog
+ * stays selectable, under its own "current selection" group, so an offline
+ * provider never silently switches sides.
+ */
 function ModelSelect({
-  label, value, groups, onChange,
+  label, value, groups, onChange, t,
 }: {
   label: string
   value: SideModel
   groups: readonly ModelGroup[]
   onChange: (model: SideModel) => void
+  t: GomokuT
 }) {
   const selected = value.provider !== undefined && value.model !== undefined
     ? value.provider + '/' + value.model
     : ''
   const known = groups.some(group => group.provider === value.provider
     && group.models.some(model => model.id === value.model))
+  const dropdownGroups: { label: string; options: { value: string; label: string }[] }[] =
+    groups.map(group => ({
+      label: group.displayName,
+      options: group.models.map(model => ({
+        value: group.provider + '/' + model.id,
+        label: model.name,
+      })),
+    }))
+  if (!known && selected !== '') {
+    dropdownGroups.unshift({
+      label: t('model.current'),
+      options: [{ value: selected, label: value.model ?? selected }],
+    })
+  }
   return (
-    <label className={css.field}>
-      <span className={css.label}>{label}</span>
-      <select
-        className={css.select}
-        value={selected}
-        onChange={(event) => {
-          const [provider, ...rest] = event.target.value.split('/')
-          onChange({ provider, model: rest.join('/') })
-        }}
-        disabled={groups.length === 0 && selected === ''}
-      >
-        {groups.length === 0 && selected === '' && <option value="">—</option>}
-        {!known && selected !== '' && <option value={selected}>{value.model}</option>}
-        {groups.map(group => (
-          <optgroup key={group.provider} label={group.displayName}>
-            {group.models.map(model => (
-              <option key={model.id} value={group.provider + '/' + model.id}>{model.name}</option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-    </label>
+    <Dropdown
+      label={label}
+      value={selected}
+      groups={dropdownGroups}
+      placeholder={t('model.placeholder')}
+      emptyText={t('model.empty')}
+      disabled={groups.length === 0 && selected === ''}
+      onChange={(next) => {
+        const [provider, ...rest] = next.split('/')
+        onChange({ provider, model: rest.join('/') })
+      }}
+    />
   )
 }
 
@@ -177,6 +190,7 @@ function SideSettings({
         value={model}
         groups={settings.groups}
         onChange={(next) => patchSettings(isBlack ? { blackModel: next } : { whiteModel: next })}
+        t={t}
       />
       {model.provider === JEV_PROVIDER
         ? <p className={css.settingsNote}>{t('jev.decision.hint')}</p>
@@ -242,6 +256,10 @@ export function GomokuSettings({ t }: GomokuSettingsProps) {
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set())
   const [resetDone, setResetDone] = useState(false)
   const resetTimer = useRef<number | undefined>(undefined)
+  // Publish the host's active appearance on this page's root so native chrome
+  // (scrollbars, carets, the OS-drawn parts of inputs) matches the palette.
+  const rootRef = useRef<HTMLDivElement>(null)
+  const scheme = useColorScheme(rootRef)
 
   useEffect(() => { loadModels() }, [])
   useEffect(() => () => { window.clearTimeout(resetTimer.current) }, [])
@@ -263,7 +281,12 @@ export function GomokuSettings({ t }: GomokuSettingsProps) {
   }
 
   return (
-    <div className={css.settings}>
+    <div
+      className={css.settings}
+      ref={rootRef}
+      data-gomoku-theme={scheme}
+      style={{ colorScheme: scheme }}
+    >
       <h2 className={css.settingsTitle}>{t('settings.title')}</h2>
       <p className={css.settingsIntro}>{t('settings.intro')}</p>
 

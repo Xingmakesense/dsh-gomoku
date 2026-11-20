@@ -4,7 +4,10 @@
 
 <p align="center">
   <img src="assets/screenshot.png" width="380" alt="棋盘页" /><br />
-  <img src="assets/settings.png" width="880" alt="设置页" />
+  <img src="assets/settings.png" width="880" alt="设置页（深色外观）" />
+  <img src="assets/settings-light.png" width="880" alt="设置页（浅色外观）" /><br />
+  <img src="assets/model-picker.png" width="300" alt="模型选择器（深色外观）" />
+  <img src="assets/model-picker-light.png" width="300" alt="模型选择器（浅色外观）" />
 </p>
 
 总是让 AI 帮你写代码、做表格？这次换它陪你下棋。`@xingmakesense/dsh-gomoku` 是 DeepSeek Harness 的五子棋插件：通过 Better Sidebar（`dsh-better-sidebar`）的标签注册服务，把「五子棋」作为一个独立页面放进右侧边栏，摆上一盘 15×15 的棋盘，让 DeepSeek 或任何你配置好的模型执子对弈。
@@ -20,6 +23,8 @@
 - **Better Sidebar 页面入口**：客户端半部通过 `ctx.betterSidebar.registerTab` 注册「五子棋」页面，从 Better Sidebar 的 + 菜单即可打开；插件依赖 `dsh-better-sidebar` 0.32.1 及以上版本。棋盘页只保留棋盘与开局控制。
 - **独立的设置页**：模型、思考档位、系统提示词与 Jev 凭据都在「设置 → 五子棋」中调整，同时可查看当前对局的思考记录；选择自动保存（Jev Key 仅保留在页面内存），对局中修改下一手生效。
 - **主题化坐标提示**：悬停或聚焦棋盘交叉点时显示「行 · 列」浮层，替代浏览器原生 title；棋盘区域之外不再有原生 tooltip。
+- **自绘的模型选择器**：模型下拉不再使用浏览器原生 `<select>`——它的弹出列表由系统绘制，深色外观下会变成白底浅字。现在触发器与弹层都由插件绘制，配色全部取自宿主的 `--dsw-alias-*` 设计令牌：深色与浅色外观都清晰可读，选中项带勾选标记、分组标题按 provider 排列。键盘可用（↑/↓、Home/End 移动，Enter 或空格选中，Esc 关闭），弹层按视口定位、空间不足时自动向上翻转，不会被设置页的滚动区域裁剪。
+- **深色 / 浅色外观适配**：插件把宿主当前的外观（`color-scheme`）发布到自己的页面根节点，滚动条、输入光标等原生部件因此跟随同一个外观；浅色外观下琥珀色强调色会加深一档，避免在白底上发虚。
 - **盘面威胁提示**：每次落子请求会附带服务端计算的威胁清单——对方可直接成五、活三（落子即形成活四）与冲四点，以及己方机会——写进用户消息提示模型优先防守；它只作参考，不强制模型落子。
 - **人机与双 AI 对弈**：支持执黑、执白、双 AI 对弈三种模式，15×15 无禁手规则（双三、双四、长连均合法，连成五子及以上即胜）。对弈模式与新开局按钮位于棋盘下方。
 - **黑白 AI 分别设置**：黑、白两方的模型与思考档位（Off / High / Max）在设置页分别选择，互不影响；模型不支持所选档位时自动回落其默认档位。
@@ -47,7 +52,7 @@ dsh plugin --profile demo add dsh-better-sidebar
 dsh plugin --profile demo add @xingmakesense/dsh-gomoku
 ```
 
-若 npm 上尚未发布 0.0.3 版本，请改用下面的 GitHub 源码安装：本仓库已提交完整源码与构建产物，安装时无需构建。
+若 npm 上尚未发布 0.0.4 版本，请改用下面的 GitHub 源码安装：本仓库已提交完整源码与构建产物，安装时无需构建。
 
 
 ### 方式二：GitHub 源码安装
@@ -64,7 +69,7 @@ dsh plugin --profile demo add github:Xingmakesense/dsh-gomoku
 dsh plugin --profile demo add .
 # 从 tarball 安装（tarball 由 pnpm pack 生成，文件名形如 xingmakesense-dsh-gomoku-<版本>.tgz）
 pnpm pack
-dsh plugin --profile demo add ./xingmakesense-dsh-gomoku-0.0.3.tgz
+dsh plugin --profile demo add ./xingmakesense-dsh-gomoku-0.0.4.tgz
 ```
 
 以上方式都直接使用仓库内提交的预构建产物（`lib/`），安装时不需要执行构建脚本——从 git 安装也无需在 profile 的 `pnpm-workspace.yaml` 里配置 `allowBuilds`。当前版本适配 dsh **0.2.2-rc.3**（`@deepseek-ai/cordis` 4.1.0），需要 Web profile（如内置的 `web` profile）与 `dsh-better-sidebar` 0.32.1+。插件使用新版 `dsh.client` 声明、Better Sidebar 的标签服务，以及统一的 `@deepseek-ai/cordis` / `@deepseek-ai/schemastery` 接口；不再兼容旧的 `0.1.x` 客户端运行时。开发依赖固定为本次验证的宿主版本，升级 dsh 后应重新执行兼容性检查。
@@ -104,7 +109,7 @@ pnpm pack
 将本次构建安装到本机 Web profile：
 
 ```sh
-dsh plugin --profile web add ./xingmakesense-dsh-gomoku-0.0.3.tgz
+dsh plugin --profile web add ./xingmakesense-dsh-gomoku-0.0.4.tgz
 dsh --profile web
 ```
 
